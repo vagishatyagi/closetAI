@@ -13,6 +13,47 @@ const CALENDAR_SCOPES = [
   "https://www.googleapis.com/auth/calendar.events.readonly",
 ];
 
+type CalendarRange = "today" | "upcoming";
+
+type GoogleCalendarInfo = {
+  id: string;
+  summary: string;
+  primary?: boolean;
+  selected?: boolean;
+  hidden?: boolean;
+  accessRole?: string;
+  timeZone?: string;
+};
+
+type CalendarQueryDebug = {
+  range: CalendarRange;
+  timeMin: string;
+  timeMax: string;
+  timeZone: string;
+  eventsFound: number;
+  calendars: Array<{
+    id: string;
+    summary: string;
+    primary?: boolean;
+    selected?: boolean;
+    hidden?: boolean;
+    accessRole?: string;
+    eventCount: number;
+    status?: number;
+    error?: string;
+  }>;
+};
+
+export type GoogleCalendarDebug = {
+  connectedCookie: boolean;
+  refreshTokenPresent: boolean;
+  accessTokenRefreshed: boolean;
+  calendarCount: number;
+  primaryCalendarId?: string;
+  accountHint?: string;
+  queries: CalendarQueryDebug[];
+};
+
 export function getGoogleConfig(req: NextRequest) {
   const clientId = process.env.GOOGLE_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
@@ -89,32 +130,61 @@ export async function refreshGoogleAccessToken(req: NextRequest) {
   return payload.access_token as string;
 }
 
+export function hasGoogleRefreshToken(req: NextRequest) {
+  return Boolean(req.cookies.get(REFRESH_COOKIE)?.value);
+}
+
+export function hasGoogleConnectedCookie(req: NextRequest) {
+  return req.cookies.get(CONNECTED_COOKIE)?.value === "1";
+}
+
 export async function fetchGoogleCalendarEvents(req: NextRequest): Promise<{
   connected: boolean;
   events: CalendarEventPayload[];
   error?: string;
+  debug: GoogleCalendarDebug;
 }> {
+  const debug: GoogleCalendarDebug = {
+    connectedCookie: hasGoogleConnectedCookie(req),
+    refreshTokenPresent: hasGoogleRefreshToken(req),
+    accessTokenRefreshed: false,
+    calendarCount: 0,
+    queries: [],
+  };
+
   try {
     const accessToken = await refreshGoogleAccessToken(req);
-    if (!accessToken) return { connected: false, events: [] };
+    if (!accessToken) return { connected: false, events: [], debug };
+    debug.accessTokenRefreshed = true;
 
     const calendars = await fetchCalendarList(accessToken);
+    debug.calendarCount = calendars.length;
+    const primaryCalendar = calendars.find(calendar => calendar.primary) || calendars[0];
+    debug.primaryCalendarId = primaryCalendar?.id;
+    debug.accountHint = getCalendarAccountHint(primaryCalendar);
+
+    const timeZone = getRuntimeTimeZone();
     const { start, end } = getTodayBounds();
-    let events = await fetchEventsAcrossCalendars(accessToken, calendars, start, end, "today");
+    const todayResult = await fetchEventsAcrossCalendars(accessToken, calendars, start, end, "today", timeZone);
+    debug.queries.push(todayResult.debug);
+    let events = todayResult.events;
 
     if (events.length === 0) {
       const upcomingEnd = new Date(start);
       upcomingEnd.setDate(upcomingEnd.getDate() + 7);
-      events = await fetchEventsAcrossCalendars(accessToken, calendars, new Date(), upcomingEnd, "upcoming");
+      const upcomingResult = await fetchEventsAcrossCalendars(accessToken, calendars, new Date(), upcomingEnd, "upcoming", timeZone);
+      debug.queries.push(upcomingResult.debug);
+      events = upcomingResult.events;
     }
 
     return {
       connected: true,
       events,
+      debug,
     };
   } catch (error: any) {
     logger.error("Failed to fetch Google Calendar events.", error);
-    return { connected: false, events: [], error: error.message };
+    return { connected: false, events: [], error: error.message, debug };
   }
 }
 
@@ -151,84 +221,136 @@ export function decodeGoogleState(state: string | null) {
   }
 }
 
-async function fetchCalendarList(accessToken: string) {
-  const response = await fetch(GOOGLE_CALENDAR_LIST_URL, {
-    headers: { Authorization: `Bearer ${accessToken}` },
-    cache: "no-store",
-  });
-  const payload = await response.json();
+async function fetchCalendarList(accessToken: string): Promise<GoogleCalendarInfo[]> {
+  const calendars: GoogleCalendarInfo[] = [];
+  let pageToken: string | undefined;
 
-  if (!response.ok) {
-    logger.warn("Google Calendar list fetch failed. Falling back to primary calendar.", {
-      status: response.status,
-      error: payload.error,
+  do {
+    const url = new URL(GOOGLE_CALENDAR_LIST_URL);
+    url.searchParams.set("maxResults", "250");
+    url.searchParams.set("showHidden", "true");
+    if (pageToken) url.searchParams.set("pageToken", pageToken);
+
+    const response = await fetch(url, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+      cache: "no-store",
     });
-    return [{ id: "primary", summary: "Primary calendar" }];
-  }
+    const payload = await response.json().catch(() => ({}));
 
-  const calendars = (payload.items || [])
-    .filter((calendar: any) => !calendar.deleted && !calendar.hidden)
+    if (!response.ok) {
+      logger.warn("Google Calendar list fetch failed. Falling back to primary calendar.", {
+        status: response.status,
+        error: payload.error,
+      });
+      return [{ id: "primary", summary: "Primary calendar" }];
+    }
+
+    calendars.push(...((payload.items || []) as any[]));
+    pageToken = payload.nextPageToken;
+  } while (pageToken);
+
+  const visibleCalendars = calendars
+    .filter((calendar: any) => !calendar.deleted && calendar.accessRole !== "none")
     .map((calendar: any) => ({
       id: calendar.id,
       summary: calendar.summary || calendar.id,
       primary: Boolean(calendar.primary),
+      selected: Boolean(calendar.selected),
+      hidden: Boolean(calendar.hidden),
+      accessRole: calendar.accessRole,
+      timeZone: calendar.timeZone,
     }));
 
-  return calendars.length > 0 ? calendars : [{ id: "primary", summary: "Primary calendar", primary: true }];
+  return visibleCalendars.length > 0 ? visibleCalendars : [{ id: "primary", summary: "Primary calendar", primary: true }];
 }
 
 async function fetchEventsAcrossCalendars(
   accessToken: string,
-  calendars: Array<{ id: string; summary: string; primary?: boolean }>,
+  calendars: GoogleCalendarInfo[],
   start: Date,
   end: Date,
-  range: "today" | "upcoming"
+  range: CalendarRange,
+  timeZone: string
 ) {
   const responses = await Promise.all(
     calendars.map(async (calendar) => {
-      const url = new URL(`${GOOGLE_CALENDAR_EVENTS_BASE_URL}/${encodeURIComponent(calendar.id)}/events`);
-      url.searchParams.set("timeMin", start.toISOString());
-      url.searchParams.set("timeMax", end.toISOString());
-      url.searchParams.set("singleEvents", "true");
-      url.searchParams.set("orderBy", "startTime");
-      url.searchParams.set("maxResults", "10");
+      const allEvents: any[] = [];
+      let pageToken: string | undefined;
+      let lastStatus = 200;
 
-      const response = await fetch(url, {
-        headers: { Authorization: `Bearer ${accessToken}` },
-        cache: "no-store",
-      });
-      const payload = await response.json();
+      do {
+        const url = new URL(`${GOOGLE_CALENDAR_EVENTS_BASE_URL}/${encodeURIComponent(calendar.id)}/events`);
+        url.searchParams.set("timeMin", start.toISOString());
+        url.searchParams.set("timeMax", end.toISOString());
+        url.searchParams.set("timeZone", calendar.timeZone || timeZone);
+        url.searchParams.set("singleEvents", "true");
+        url.searchParams.set("orderBy", "startTime");
+        url.searchParams.set("maxResults", "50");
+        if (pageToken) url.searchParams.set("pageToken", pageToken);
 
-      if (!response.ok) {
-        logger.warn("Google Calendar events fetch failed for a calendar.", {
-          calendar: calendar.summary,
-          status: response.status,
-          error: payload.error,
+        const response = await fetch(url, {
+          headers: { Authorization: `Bearer ${accessToken}` },
+          cache: "no-store",
         });
-        return [];
-      }
 
-      return (payload.items || [])
-        .map((event: any) => normalizeGoogleCalendarEvent(event, calendar.summary, range))
+        lastStatus = response.status;
+        const payload = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+          logger.warn("Google Calendar events fetch failed for a calendar.", {
+            calendar: calendar.summary,
+            status: response.status,
+            error: payload.error,
+          });
+          return {
+            events: [],
+            debug: buildCalendarQueryCalendarDebug(calendar, 0, response.status, payload.error?.message || payload.error),
+          };
+        }
+
+        allEvents.push(...(payload.items || []));
+        pageToken = payload.nextPageToken;
+      } while (pageToken && allEvents.length < 100);
+
+      const events = allEvents
+        .filter((event: any) => event.status !== "cancelled")
+        .map((event: any) => normalizeGoogleCalendarEvent(event, calendar, range))
         .filter(Boolean) as CalendarEventPayload[];
+
+      return {
+        events,
+        debug: buildCalendarQueryCalendarDebug(calendar, events.length, lastStatus),
+      };
     })
   );
 
   const deduped = new Map<string, CalendarEventPayload>();
-  for (const event of responses.flat()) {
+  for (const event of responses.flatMap(response => response.events)) {
     const key = `${event.source}:${event.id || event.start}:${event.title}`;
     if (!deduped.has(key)) deduped.set(key, event);
   }
 
-  return [...deduped.values()]
+  const events = [...deduped.values()]
     .sort((a, b) => new Date(a.start || "").getTime() - new Date(b.start || "").getTime())
     .slice(0, 10);
+
+  return {
+    events,
+    debug: {
+      range,
+      timeMin: start.toISOString(),
+      timeMax: end.toISOString(),
+      timeZone,
+      eventsFound: events.length,
+      calendars: responses.map(response => response.debug),
+    },
+  };
 }
 
 function normalizeGoogleCalendarEvent(
   event: any,
-  calendarName = "Google Calendar",
-  range: "today" | "upcoming" = "today"
+  calendar: GoogleCalendarInfo,
+  range: CalendarRange = "today"
 ): CalendarEventPayload | null {
   if (!event) return null;
   const startValue = event.start?.dateTime || event.start?.date;
@@ -243,7 +365,26 @@ function normalizeGoogleCalendarEvent(
     start: startValue,
     end: endValue,
     location: event.location || "",
-    source: `google:${range}:${calendarName}`,
+    source: `google:${range}:${calendar.summary || calendar.id}`,
+  };
+}
+
+function buildCalendarQueryCalendarDebug(
+  calendar: GoogleCalendarInfo,
+  eventCount: number,
+  status?: number,
+  error?: string
+) {
+  return {
+    id: calendar.id,
+    summary: calendar.summary,
+    primary: calendar.primary,
+    selected: calendar.selected,
+    hidden: calendar.hidden,
+    accessRole: calendar.accessRole,
+    eventCount,
+    status,
+    error,
   };
 }
 
@@ -253,6 +394,17 @@ function getTodayBounds() {
   const end = new Date(start);
   end.setDate(start.getDate() + 1);
   return { start, end };
+}
+
+function getRuntimeTimeZone() {
+  return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+}
+
+function getCalendarAccountHint(calendar?: GoogleCalendarInfo) {
+  if (!calendar) return undefined;
+  if (calendar.id.includes("@")) return calendar.id;
+  if (calendar.summary.includes("@")) return calendar.summary;
+  return calendar.summary;
 }
 
 function formatEventTime(value?: string) {

@@ -553,6 +553,7 @@ export default function App() {
   const [calendarEvents, setCalendarEvents] = useState<any[]>([]);
   const [calendarConnected, setCalendarConnected] = useState<boolean>(false);
   const [calendarError, setCalendarError] = useState<string | null>(null);
+  const [calendarDebug, setCalendarDebug] = useState<any>(null);
   const [ootdWeather, setOotdWeather] = useState<any>(null);
   const [plannerSource, setPlannerSource] = useState<string>("");
 
@@ -632,6 +633,17 @@ export default function App() {
       fetchClosetItems();
     }
   }, [isAuthenticated, appUserId, userProfile.email, userProfile.gender]);
+
+  useEffect(() => {
+    const handleFocus = () => {
+      if (isAuthenticated && (appUserId || userProfile.email)) {
+        fetchClosetItems();
+        fetchConnectedStores();
+      }
+    };
+    window.addEventListener("focus", handleFocus);
+    return () => window.removeEventListener("focus", handleFocus);
+  }, [isAuthenticated, appUserId, userProfile.email]);
 
   const fetchClosetItems = async () => {
     try {
@@ -883,9 +895,14 @@ export default function App() {
 
       setOotdResult(normalizedResult);
       setSelectedItems(itemIds);
-      setCalendarEvents(data.calendar || []);
+      setCalendarEvents(
+        Array.isArray(data.calendarEvents)
+          ? data.calendarEvents
+          : (data.calendar || []).filter((event: any) => String(event.source || "").startsWith("google:"))
+      );
       setCalendarConnected(Boolean(data.calendarConnected));
       setCalendarError(data.calendarError || null);
+      setCalendarDebug(data.calendarDebug || null);
       setOotdWeather(data.weather || null);
       setPlannerSource(data.plannerSource || "");
       if (data.userId && data.userId !== appUserId) {
@@ -1103,6 +1120,7 @@ export default function App() {
     setCalendarConnected(false);
     setCalendarEvents([]);
     setCalendarError(null);
+    setCalendarDebug(null);
     compileOOTDSelection();
   };
 
@@ -1708,61 +1726,42 @@ export default function App() {
 
                   <div className="flex flex-col gap-2 flex-1 text-center md:text-left">
                     <span className="text-[10px] uppercase font-bold tracking-widest text-cyan-400 flex items-center gap-1.5 justify-center md:justify-start">
-                      <Compass className="h-3 w-3 text-cyan-400" /> Retailer Order Importer
+                      <Compass className="h-3 w-3 text-cyan-400" /> Retailer &amp; Email Sync Portal
                     </span>
                     <h2 className="text-xl font-bold tracking-tight text-white">
                       Auto-Sync Online Purchase History
                     </h2>
                     <p className="text-xs text-slate-400 leading-relaxed max-w-md">
-                      Connect your online store accounts to automatically extract order histories and populate your smart closet catalog without needing model photography.
+                      Connect your online store accounts or securely scan clothing receipt emails to populate your smart closet catalog without needing model photography.
                     </p>
+                    
+                    {/* Connection Badges */}
+                    {connectedStores.length > 0 && (
+                      <div className="flex flex-wrap gap-2.5 mt-3 justify-center md:justify-start">
+                        {connectedStores.map((store) => (
+                          <div key={store.id} className="flex items-center gap-2 px-3 py-1 bg-slate-950/60 border border-slate-800/80 rounded-lg text-[10px] font-mono font-bold text-slate-200">
+                            <span className="relative flex h-1.5 w-1.5">
+                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                              <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
+                            </span>
+                            <span className="capitalize">{store.store_name === 'email-sync' ? 'Email Receipts Scanner' : store.store_name}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
 
-                  <div className="w-full md:w-auto flex flex-col sm:flex-row md:flex-col lg:flex-row gap-3">
-                    {connectedStores.some(s => s.store_name === "zara.com") ? (
-                      <div className="flex flex-col items-center sm:items-start md:items-center lg:items-start gap-2.5 bg-slate-950/40 border border-slate-800/80 p-4 rounded-xl min-w-[220px]">
-                        <div className="flex items-center gap-2">
-                          <span className="relative flex h-2 w-2">
-                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                          </span>
-                          <span className="text-xs font-bold text-slate-200">Zara.com Connected</span>
-                        </div>
-                        <span className="text-[10px] text-slate-500">
-                          Last sync: {formatLastWorn(connectedStores.find(s => s.store_name === "zara.com")?.last_synced_at)}
-                        </span>
-                        <button
-                          onClick={handleCronSync}
-                          disabled={cronSyncing}
-                          className="w-full text-xs font-semibold px-4 py-2 rounded-lg border border-cyan-500/30 hover:border-cyan-400 bg-cyan-950/20 hover:bg-cyan-950/50 transition-all text-cyan-400 hover:text-cyan-300 flex items-center justify-center gap-1.5 cursor-pointer"
-                        >
-                          {cronSyncing ? (
-                            <>
-                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                              <span>Syncing Background...</span>
-                            </>
-                          ) : (
-                            <>
-                              <RefreshCw className="h-3.5 w-3.5" />
-                              <span>Trigger Cron Sync</span>
-                            </>
-                          )}
-                        </button>
-                      </div>
-                    ) : (
-                      <button
-                        onClick={() => {
-                          setRetailSyncLogs([]);
-                          setRetailSyncStatus("idle");
-                          setRetailSyncOpen(true);
-                        }}
-                        className="flex flex-col items-center justify-center border-2 border-dashed border-slate-700 hover:border-cyan-500/80 bg-slate-950/40 hover:bg-slate-950/80 transition-all rounded-xl p-5 cursor-pointer text-center group min-w-[220px]"
-                      >
-                        <Compass className="h-8 w-8 text-slate-400 group-hover:text-cyan-400 transition-colors mb-2 group-hover:scale-110 transform" />
-                        <span className="text-xs font-semibold text-slate-200">Integrate Zara Account</span>
-                        <span className="text-[10px] text-slate-500 mt-1">Extract 5 items securely</span>
-                      </button>
-                    )}
+                  <div className="w-full md:w-auto flex flex-col gap-3 min-w-[220px]">
+                    <a
+                      href="/retail-sync"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-5 py-4 bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-400 hover:to-blue-400 text-slate-950 font-extrabold text-xs rounded-xl shadow-lg shadow-cyan-500/10 cursor-pointer transition-all flex items-center justify-center gap-2 hover:scale-102 transform text-center"
+                    >
+                      <Compass className="h-4 w-4" />
+                      <span>Launch Sync Hub (New Tab)</span>
+                      <ArrowRight className="h-3.5 w-3.5" />
+                    </a>
                   </div>
                 </div>
 

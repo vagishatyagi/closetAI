@@ -138,15 +138,20 @@ export function buildStyleDigestEmail({ fullName, city, weather, calendar, outfi
                 pieces.length
                   ? pieces
                       .map(
-                        (item) => `
-                          <div class="item-card">
-                            ${item.imageUrl ? `<img class="item-img" src="${escapeAttribute(item.imageUrl)}" alt="${escapeAttribute(item.subCategory)}">` : ""}
-                            <div class="item-body">
-                              <p class="item-title">${escapeHtml(item.subCategory || "Wardrobe piece")}</p>
-                              <p class="item-subtitle">${escapeHtml(item.category || "Closet item")}</p>
+                        (item) => {
+                          const imageUrl = item.imageUrl || (item as any).image_url;
+                          const subCategory = item.subCategory || (item as any).sub_category || "Wardrobe piece";
+                          const category = item.category || "Closet item";
+                          return `
+                            <div class="item-card">
+                              ${imageUrl ? `<img class="item-img" src="${escapeAttribute(imageUrl)}" alt="${escapeAttribute(subCategory)}">` : ""}
+                              <div class="item-body">
+                                <p class="item-title">${escapeHtml(subCategory)}</p>
+                                <p class="item-subtitle">${escapeHtml(category)}</p>
+                              </div>
                             </div>
-                          </div>
-                        `
+                          `;
+                        }
                       )
                       .join("")
                   : "<p>No pieces were selected today.</p>"
