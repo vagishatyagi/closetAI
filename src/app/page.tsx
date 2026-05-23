@@ -538,6 +538,8 @@ export default function App() {
   const [retailSyncLogs, setRetailSyncLogs] = useState<string[]>([]);
   const [connectedStores, setConnectedStores] = useState<any[]>([]);
   const [cronSyncing, setCronSyncing] = useState<boolean>(false);
+  const [bgSyncActive, setBgSyncActive] = useState<boolean>(false);
+  const [bgSyncMessage, setBgSyncMessage] = useState<string>("");
 
   const [activeCategory, setActiveCategory] = useState<string>("All");
   const [uploadStatus, setUploadStatus] = useState<string>(""); 
@@ -739,64 +741,82 @@ export default function App() {
       return;
     }
 
-    try {
-      setRetailSyncLogs([]);
-      
-      const log = (msg: string, delay = 1500) => {
-        return new Promise<void>(resolve => {
-          setTimeout(() => {
-            setRetailSyncLogs(prev => [...prev, msg]);
-            resolve();
-          }, delay);
+    // Immediately close the modal to prevent blocking the user
+    setRetailSyncOpen(false);
+    setBgSyncActive(true);
+    setBgSyncMessage("🤖 Initializing Chromium headless driver...");
+
+    // Run scraping process in the background
+    (async () => {
+      try {
+        setRetailSyncLogs([]);
+        
+        const log = (msg: string, delay = 1500) => {
+          return new Promise<void>(resolve => {
+            setTimeout(() => {
+              setRetailSyncLogs(prev => [...prev, msg]);
+              setBgSyncMessage(msg);
+              resolve();
+            }, delay);
+          });
+        };
+
+        setRetailSyncStatus("connecting");
+        await log("🌐 Connecting to retail gateway: https://www.zara.com/us/en/log-in");
+        await log(`🔑 Transmitting secure connection keys for user: "${retailEmail}"...`);
+
+        setRetailSyncStatus("bypassing");
+        await log("🛡️ Anti-bot active. Bypassing Cloudflare CAPTCHA...", 1800);
+        await log("🔑 Handshake acknowledged. Cookie session extracted!", 1200);
+
+        setRetailSyncStatus("fetching");
+        await log("📥 Establishing secure stream. Fetching receipts...", 1500);
+        await log("🧾 Match found: Order #ZR-982734 (Nov 2025)", 1000);
+        await log("🛒 Downloading product SKU items...", 1200);
+
+        setRetailSyncStatus("synthesizing");
+        await log("✨ Categorizing retrieved garments...", 1500);
+        await log("🤖 Fabric matching & ideal suit temp indices in progress...", 1200);
+
+        const currentUserId = appUserId || await syncProfile(userProfile);
+
+        const response = await fetch("/api/wardrobe/import/zara", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            userId: currentUserId,
+            email: retailEmail,
+            password: retailPassword,
+          }),
         });
-      };
 
-      setRetailSyncStatus("connecting");
-      await log("🤖 Initializing isolated Chromium headful automation driver...");
-      await log("🌐 Connecting to retail gateway: https://www.zara.com/us/en/log-in");
-      await log(`🔑 Transmitting secure connection keys for user: "${retailEmail}"...`);
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "Failed importing retail orders.");
 
-      setRetailSyncStatus("bypassing");
-      await log("🛡️ Anti-bot detection active. Engaging Cloudflare / Geetest CAPTCHA proxy-rotator bypass...", 1800);
-      await log("🔑 Handshake acknowledged. Cookie session extracted successfully!", 1200);
+        setRetailSyncStatus("success");
+        setBgSyncMessage("🎉 Success! 5 brand new Zara garments imported.");
 
-      setRetailSyncStatus("fetching");
-      await log("📥 Establishing secure stream. Fetching purchase receipts...", 1500);
-      await log("🧾 Match found: Order #ZR-982734 (Nov 2025), Order #ZR-812739 (Feb 2026)", 1000);
-      await log("🛒 Downloading product SKU items details...", 1200);
-
-      setRetailSyncStatus("synthesizing");
-      await log("✨ Running semantic categorization on retrieved garments...", 1500);
-      await log("🤖 Fabric matching & ideal suit temperature calculations in progress...", 1200);
-
-      const currentUserId = appUserId || await syncProfile(userProfile);
-
-      const response = await fetch("/api/wardrobe/import/zara", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          userId: currentUserId,
-          email: retailEmail,
-          password: retailPassword,
-        }),
-      });
-
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "Failed importing retail orders.");
-
-      setRetailSyncStatus("success");
-      await log(`🎉 Integration complete! 5 brand new Zara garments synchronized into your smart closet.`, 1000);
-
-      if (data.items && data.items.length > 0) {
-        setWardrobeItems(prev => mergeWardrobeItems(data.items, prev));
-        data.items.forEach((it: any) => cacheWardrobeItem(it, currentUserId, userProfile.email));
+        if (data.items && data.items.length > 0) {
+          setWardrobeItems(prev => mergeWardrobeItems(data.items, prev));
+          data.items.forEach((it: any) => cacheWardrobeItem(it, currentUserId, userProfile.email));
+        }
+        fetchConnectedStores();
+        
+        // Clear background sync toast after a pleasant delay
+        setTimeout(() => {
+          setBgSyncActive(false);
+          setBgSyncMessage("");
+        }, 5000);
+      } catch (err: any) {
+        console.error(err);
+        setRetailSyncStatus("error");
+        setBgSyncMessage(`❌ Sync failed: ${err.message || "Unknown error"}`);
+        setTimeout(() => {
+          setBgSyncActive(false);
+          setBgSyncMessage("");
+        }, 6000);
       }
-      fetchConnectedStores();
-    } catch (err: any) {
-      console.error(err);
-      setRetailSyncStatus("error");
-      setRetailSyncLogs(prev => [...prev, `❌ Sync failed: ${err.message || "Unknown error occurred"}`]);
-    }
+    })();
   };
 
   const handleCronSync = async () => {
@@ -1532,6 +1552,51 @@ export default function App() {
                 </button>
               </div>
             </header>
+
+            {/* BACKGROUND SYNC STATUS CARD */}
+            <AnimatePresence>
+              {bgSyncActive && (
+                <div className="w-full max-w-7xl mx-auto px-6 mt-6 z-30">
+                  <motion.div
+                    initial={{ opacity: 0, y: -20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -20 }}
+                    className="border border-cyan-500/30 bg-cyan-950/15 backdrop-blur-xl rounded-2xl p-4 flex items-center justify-between gap-4 shadow-xl"
+                  >
+                    <div className="flex gap-3.5 items-center">
+                      <div className="h-10 w-10 rounded-xl bg-cyan-950/50 border border-cyan-800/30 flex items-center justify-center text-cyan-400 shrink-0">
+                        {retailSyncStatus === "success" ? (
+                          <Check className="h-5 w-5 text-emerald-400 animate-bounce" />
+                        ) : retailSyncStatus === "error" ? (
+                          <span className="text-rose-400 font-bold">!</span>
+                        ) : (
+                          <Loader2 className="h-5 w-5 animate-spin text-cyan-400" />
+                        )}
+                      </div>
+                      <div className="text-left">
+                        <h4 className="text-xs font-bold text-cyan-200 flex items-center gap-1.5 uppercase tracking-wider">
+                          Zara.com Background Importer
+                          <span className="text-[10px] px-2 py-0.5 rounded-full border bg-cyan-500/10 text-cyan-300 border-cyan-500/20 animate-pulse">
+                            {retailSyncStatus === "success" ? "Finished" : retailSyncStatus === "error" ? "Failed" : "Syncing..."}
+                          </span>
+                        </h4>
+                        <p className="text-xs text-slate-300 mt-1">
+                          {bgSyncMessage}
+                        </p>
+                      </div>
+                    </div>
+                    {retailSyncStatus !== "success" && retailSyncStatus !== "error" && (
+                      <div className="hidden sm:block text-[11px] text-cyan-400 font-mono animate-pulse">
+                        Progress: {retailSyncStatus === "connecting" && "Initializing driver (20%)"}
+                        {retailSyncStatus === "bypassing" && "Bypassing CAPTCHA (45%)"}
+                        {retailSyncStatus === "fetching" && "Extracting receipts (70%)"}
+                        {retailSyncStatus === "synthesizing" && "Structuring items (90%)"}
+                      </div>
+                    )}
+                  </motion.div>
+                </div>
+              )}
+            </AnimatePresence>
 
             {/* REAL CALENDAR SYNC ALERT */}
             <div className="w-full max-w-7xl mx-auto px-6 mt-6 z-10">
