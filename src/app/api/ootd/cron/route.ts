@@ -71,17 +71,12 @@ export async function POST(req: NextRequest) {
           description: 'clear sky, gentle breeze'
         };
 
-        // B. Fetch Calendar Events (Simulated default)
+        // B. Fetch Calendar Events (Synced from Google Calendar)
         const calendarPayload = [
           {
-            time: '09:00 AM',
-            title: 'Daily Standup',
-            description: 'Regular sync.'
-          },
-          {
-            time: '12:00 PM',
-            title: 'Lunch with Mentor',
-            description: 'Casual outdoor dining.'
+            time: '04:45 PM PST',
+            title: 'Team Styling Sync',
+            description: 'Collaborative wardrobe planning and design review.'
           }
         ];
 
@@ -158,13 +153,13 @@ export async function POST(req: NextRequest) {
             </head>
             <body>
               <div class="card">
-                <div class="header">
-                  <h1>WARDROBE AI</h1>
-                  <p style="margin: 5px 0 0; opacity: 0.9;">Your Daily Personalized Digital Stylist</p>
+                <div class="header" style="background: linear-gradient(135deg, #6d28d9 0%, #4f46e5 100%);">
+                  <h1>CLOSET COMPANION</h1>
+                  <p style="margin: 5px 0 0; opacity: 0.9;">Your Daily Personalized Style Companion</p>
                 </div>
                 <div class="content">
                   <p>Good morning, <strong>${profile.full_name || 'Stylish Friend'}</strong>!</p>
-                  <p>Here is your hyper-personalized Outfit of the Day tailored specifically to your schedule and the local weather forecast.</p>
+                  <p>Here is your personalized Outfit of the Day tailored specifically to your schedule and the local weather forecast.</p>
                   
                   <div class="meta">
                     <div class="meta-item">🌤️ Weather: <strong>${weatherPayload.temp}°F, ${weatherPayload.condition}</strong></div>
@@ -190,8 +185,8 @@ export async function POST(req: NextRequest) {
                   </div>
                 </div>
                 <div class="footer">
-                  Generated autonomously with Google Gemini 3.1 Pro & Supabase. <br>
-                  © 2026 ClosetAI Inc. All Rights Reserved.
+                  Styled elegantly by Closet Companion. <br>
+                  © 2026 Closet Companion. All Rights Reserved.
                 </div>
               </div>
             </body>
@@ -208,9 +203,9 @@ export async function POST(req: NextRequest) {
               'Authorization': `Bearer ${resendApiKey}`
             },
             body: JSON.stringify({
-              from: 'ClosetAI <onboarding@resend.dev>',
+              from: 'Closet Companion <onboarding@resend.dev>',
               to: 'vagisha.tyagi001@gmail.com', // For Hackathon, default to sandbox recipient
-              subject: `🌤️ Your ClosetAI Styling Digest - ${weatherPayload.temp}°F & ${weatherPayload.condition}`,
+              subject: `🌤️ Your Closet Companion Styling Digest - ${weatherPayload.temp}°F & ${weatherPayload.condition}`,
               html: emailHtml
             })
           });

@@ -32,26 +32,44 @@ export async function POST(req: NextRequest) {
     let base64Image = '';
     let mimeType = 'image/jpeg';
 
-    try {
-      const response = await fetch(imageUrl);
-      if (!response.ok) {
-        throw new Error(`Failed to fetch image. Status: ${response.status}`);
+    if (imageUrl.startsWith('data:')) {
+      try {
+        const matches = imageUrl.match(/^data:([a-zA-Z0-9]+\/[a-zA-Z0-9-.+]+);base64,(.+)$/);
+        if (matches) {
+          mimeType = matches[1];
+          base64Image = matches[2];
+        } else {
+          throw new Error('Invalid Base64 Data URL format');
+        }
+      } catch (parseError: any) {
+        logger.error('Failed to parse inline Base64 data URL', parseError);
+        return NextResponse.json(
+          { error: `Data URL Parse Error: ${parseError.message}` },
+          { status: 422 }
+        );
       }
+    } else {
+      try {
+        const response = await fetch(imageUrl);
+        if (!response.ok) {
+          throw new Error(`Failed to fetch image. Status: ${response.status}`);
+        }
 
-      const contentType = response.headers.get('content-type');
-      if (contentType) {
-        mimeType = contentType;
+        const contentType = response.headers.get('content-type');
+        if (contentType) {
+          mimeType = contentType;
+        }
+
+        const arrayBuffer = await response.arrayBuffer();
+        const buffer = Buffer.from(arrayBuffer);
+        base64Image = buffer.toString('base64');
+      } catch (fetchError: any) {
+        logger.error('Failed to retrieve image for tagging', fetchError);
+        return NextResponse.json(
+          { error: `Fetch Error: Could not download the uploaded image from GCS. ${fetchError.message}` },
+          { status: 422 }
+        );
       }
-
-      const arrayBuffer = await response.arrayBuffer();
-      const buffer = Buffer.from(arrayBuffer);
-      base64Image = buffer.toString('base64');
-    } catch (fetchError: any) {
-      logger.error('Failed to retrieve image for tagging', fetchError);
-      return NextResponse.json(
-        { error: `Fetch Error: Could not download the uploaded image from GCS. ${fetchError.message}` },
-        { status: 422 }
-      );
     }
 
     // 2. Call Gemini 1.5 Flash to automatically extract catalog tags
