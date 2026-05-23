@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { getSupabaseAdmin } from '@/lib/supabase';
 import { generateWardrobeTags, generateStyleEmbedding } from '@/lib/gemini';
 import { logger } from '@/lib/logger';
+import { resolveAppUser } from '@/lib/profile';
 
 export const runtime = 'nodejs';
 
@@ -16,7 +17,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { imageUrl, userId: customUserId } = body;
+    const { imageUrl, userId: customUserId, userProfile } = body;
 
     if (!imageUrl) {
       logger.warn('Tagging attempted without imageUrl.');
@@ -26,7 +27,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    logger.info(functionName, { imageUrl, customUserId });
+    logger.info(functionName, { imageUrl, customUserId, email: userProfile?.email });
 
     // 1. Fetch the image from Supabase Storage / Public link and parse to Base64
     let base64Image = '';
@@ -83,11 +84,19 @@ export async function POST(req: NextRequest) {
     // 4. Call Gemini Embedding API to produce style vectors (1536 dims)
     const styleEmbedding = await generateStyleEmbedding(styleDescription);
 
-    // 5. Database user resolution (uses mock fallback for easy local hackathon tests)
-    const userId = customUserId || '00000000-0000-0000-0000-000000000000';
+    // 5. Database user resolution. The service role route creates/updates the
+    // profile first so wardrobe_items passes the auth.users foreign key.
+    const { userId } = await resolveAppUser({
+      userId: customUserId,
+      fullName: userProfile?.fullName,
+      email: userProfile?.email,
+      locationCity: userProfile?.locationCity,
+      budgetLimit: userProfile?.budgetLimit,
+    });
+    const admin = getSupabaseAdmin();
 
     // 6. Insert full wardrobe record into PostgreSQL
-    const { data: wardrobeItem, error: dbError } = await supabase
+    const { data: wardrobeItem, error: dbError } = await admin
       .from('wardrobe_items')
       .insert({
         user_id: userId,
@@ -108,66 +117,39 @@ export async function POST(req: NextRequest) {
 
     if (dbError) {
       logger.error('Failed to save wardrobe item to PostgreSQL database', dbError);
-      
-      // If table profiles doesn't contain the mock user, we need to create it or bypass profile constraints
-      if (dbError.message.includes('foreign key constraint')) {
-        logger.warn('Foreign key profile mismatch. Proactively provisioning mock profile row.');
-        
-        // Upsert mock profile first to ensure foreign key constraint passes
-        await supabase
-          .from('profiles')
-          .upsert({
-            id: userId,
-            full_name: 'Hackathon User',
-            location_city: 'New York',
-            temperature_unit: 'F',
-          });
 
-        // Retry the wardrobe_items insert
-        const { data: retryItem, error: retryError } = await supabase
-          .from('wardrobe_items')
-          .insert({
-            user_id: userId,
-            image_url: imageUrl,
-            category: tags.category,
-            sub_category: tags.subCategory,
-            color_family: tags.colorFamily,
-            pattern: tags.pattern,
-            fabric: tags.fabric,
-            formality: tags.formality,
-            min_temp: tags.weatherSuitability.minTempF,
-            max_temp: tags.weatherSuitability.maxTempF,
-            precipitation_resistant: tags.weatherSuitability.precipitationResistant,
-            style_embedding: styleEmbedding,
-          })
-          .select()
-          .single();
+      const fallbackItem = {
+        id: crypto.randomUUID(),
+        user_id: userId,
+        image_url: imageUrl,
+        category: tags.category,
+        sub_category: tags.subCategory,
+        color_family: tags.colorFamily,
+        pattern: tags.pattern,
+        fabric: tags.fabric,
+        formality: tags.formality,
+        min_temp: tags.weatherSuitability.minTempF,
+        max_temp: tags.weatherSuitability.maxTempF,
+        precipitation_resistant: tags.weatherSuitability.precipitationResistant,
+        created_at: new Date().toISOString(),
+        persisted: false,
+      };
 
-        if (retryError) {
-          return NextResponse.json(
-            { error: `Database insert failed on retry: ${retryError.message}` },
-            { status: 500 }
-          );
-        }
-
-        logger.info(functionName, { success: true, item: retryItem });
-        return NextResponse.json({
-          success: true,
-          item: retryItem,
-          tags,
-        });
-      }
-
-      return NextResponse.json(
-        { error: `Database Save Error: ${dbError.message}` },
-        { status: 500 }
-      );
+      return NextResponse.json({
+        success: true,
+        persisted: false,
+        warning: `Database save skipped: ${dbError.message}`,
+        userId,
+        item: fallbackItem,
+        tags,
+      });
     }
 
     logger.info(functionName, { success: true, item: wardrobeItem });
 
     return NextResponse.json({
       success: true,
+      userId,
       item: wardrobeItem,
       tags,
     });

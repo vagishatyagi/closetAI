@@ -3,12 +3,47 @@
 import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
-  Upload, Cloud, Sparkles, Filter, CheckCircle2, Loader2, 
-  Trash2, Sun, Calendar, Mail, Heart, RefreshCw, ShoppingBag,
+  Upload, Sparkles, Filter, CheckCircle2, Loader2, 
+  Trash2, Calendar, Mail, Heart, RefreshCw,
   ArrowRight, Sparkle, LogIn, Compass, ShieldCheck, MapPin, DollarSign,
   User, Check, Camera, Image as ImageIcon, Eye
 } from "lucide-react";
-import { supabase } from "@/lib/supabase";
+
+const WARDROBE_IMAGES = {
+  trenchCoat: "https://m.media-amazon.com/images/I/61GHW7bE3OL._AC_UL640_QL65_.jpg",
+  cardigan: "https://m.media-amazon.com/images/I/71D6XzzIgyL._AC_UL640_QL65_.jpg",
+  floralDress: "https://m.media-amazon.com/images/I/71OAcN7nmlL._AC_UL640_QL65_.jpg",
+  pleatedSkirt: "https://m.media-amazon.com/images/I/61b6tZ8mHvL._AC_UL640_QL65_.jpg",
+  ankleBoots: "https://m.media-amazon.com/images/I/71gHHJV+6DL._AC_UL640_QL65_.jpg",
+  satinBlouse: "https://m.media-amazon.com/images/I/61q+sy7esWL._AC_UL640_QL65_.jpg",
+  highWaistedJeans: "https://m.media-amazon.com/images/I/71COA9r5sYL._AC_UL640_QL65_.jpg",
+  blazer: "https://m.media-amazon.com/images/I/71Qn828Je2L._AC_UL640_QL65_.jpg",
+  ribbedSweater: "https://m.media-amazon.com/images/I/61vOYfmPuvL._AC_UL640_QL65_.jpg",
+  flats: "https://m.media-amazon.com/images/I/81Oy9y1aQVL._AC_UL640_QL65_.jpg",
+  linenDress: "https://m.media-amazon.com/images/I/61c2CefKYsL._AC_UL640_QL65_.jpg",
+  crewneckTee: "https://m.media-amazon.com/images/I/61x-LF9fyYL._AC_UL640_QL65_.jpg",
+  chinos: "https://m.media-amazon.com/images/I/714rUx8rGDL._AC_UL640_QL65_.jpg",
+  linenShirt: "https://m.media-amazon.com/images/I/61q+sy7esWL._AC_UL640_QL65_.jpg",
+  denimJacket: "https://m.media-amazon.com/images/I/71DOPxLVvKL._AC_UL640_QL65_.jpg",
+  sneakers: "https://m.media-amazon.com/images/I/718cNfFJmiL._AC_UL640_QL65_.jpg",
+  bomberJacket: "https://m.media-amazon.com/images/I/61XHdgc2rcL._AC_UL640_QL65_.jpg",
+} as const;
+
+const userWardrobeStorageKey = (userId: string, email: string) =>
+  `closet-companion-wardrobe-${userId || email || "anonymous"}`;
+
+const mergeWardrobeItems = (...groups: any[][]) => {
+  const seen = new Set<string>();
+  const merged: any[] = [];
+  for (const group of groups) {
+    for (const item of group) {
+      if (!item?.id || seen.has(item.id)) continue;
+      seen.add(item.id);
+      merged.push(item);
+    }
+  }
+  return merged;
+};
 
 // FEMININE MOCK WARDROBE
 const FEMALE_WARDROBE = [
@@ -20,7 +55,7 @@ const FEMALE_WARDROBE = [
     pattern: "Solid",
     fabric: "Gabardine / Cotton Blend",
     formality: "Smart Casual",
-    image_url: "https://images.unsplash.com/photo-1591047139829-d91aecb6caea?w=500&auto=format&fit=crop&q=60",
+    image_url: WARDROBE_IMAGES.trenchCoat,
     min_temp: 35,
     max_temp: 60,
     precipitation_resistant: true,
@@ -34,7 +69,7 @@ const FEMALE_WARDROBE = [
     pattern: "Textured",
     fabric: "Merino Wool",
     formality: "Smart Casual",
-    image_url: "https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?w=500&auto=format&fit=crop&q=60",
+    image_url: WARDROBE_IMAGES.cardigan,
     min_temp: 40,
     max_temp: 65,
     precipitation_resistant: false,
@@ -48,7 +83,7 @@ const FEMALE_WARDROBE = [
     pattern: "Floral",
     fabric: "Silk Blend",
     formality: "Casual",
-    image_url: "https://images.unsplash.com/photo-1572804013309-59a88b7e92f1?w=500&auto=format&fit=crop&q=60",
+    image_url: WARDROBE_IMAGES.floralDress,
     min_temp: 65,
     max_temp: 85,
     precipitation_resistant: false,
@@ -62,7 +97,7 @@ const FEMALE_WARDROBE = [
     pattern: "Solid",
     fabric: "Wool Crepe",
     formality: "Smart Casual",
-    image_url: "https://images.unsplash.com/photo-1583391733956-3750e0ff4e8b?w=500&auto=format&fit=crop&q=60",
+    image_url: WARDROBE_IMAGES.pleatedSkirt,
     min_temp: 45,
     max_temp: 70,
     precipitation_resistant: false,
@@ -76,7 +111,7 @@ const FEMALE_WARDROBE = [
     pattern: "Solid",
     fabric: "Suede",
     formality: "Smart Casual",
-    image_url: "https://images.unsplash.com/photo-1608256246200-53e635b5b65f?w=500&auto=format&fit=crop&q=60",
+    image_url: WARDROBE_IMAGES.ankleBoots,
     min_temp: 30,
     max_temp: 65,
     precipitation_resistant: true,
@@ -90,7 +125,7 @@ const FEMALE_WARDROBE = [
     pattern: "Solid",
     fabric: "Silk",
     formality: "Formal",
-    image_url: "https://images.unsplash.com/photo-1603252109303-2751441dd157?w=500&auto=format&fit=crop&q=60",
+    image_url: WARDROBE_IMAGES.satinBlouse,
     min_temp: 55,
     max_temp: 80,
     precipitation_resistant: false,
@@ -104,7 +139,7 @@ const FEMALE_WARDROBE = [
     pattern: "Solid",
     fabric: "Cotton Denim",
     formality: "Casual",
-    image_url: "https://images.unsplash.com/photo-1541099649105-f69ad21f3246?w=500&auto=format&fit=crop&q=60",
+    image_url: WARDROBE_IMAGES.highWaistedJeans,
     min_temp: 50,
     max_temp: 80,
     precipitation_resistant: false,
@@ -118,7 +153,7 @@ const FEMALE_WARDROBE = [
     pattern: "Solid",
     fabric: "Wool Blend",
     formality: "Smart Casual",
-    image_url: "https://images.unsplash.com/photo-1548624149-f9b1859aa700?w=500&auto=format&fit=crop&q=60",
+    image_url: WARDROBE_IMAGES.blazer,
     min_temp: 40,
     max_temp: 65,
     precipitation_resistant: false,
@@ -132,7 +167,7 @@ const FEMALE_WARDROBE = [
     pattern: "Textured",
     fabric: "Cotton Knit",
     formality: "Casual",
-    image_url: "https://images.unsplash.com/photo-1614975058789-41316d0e2e9c?w=500&auto=format&fit=crop&q=60",
+    image_url: WARDROBE_IMAGES.ribbedSweater,
     min_temp: 45,
     max_temp: 70,
     precipitation_resistant: false,
@@ -146,7 +181,7 @@ const FEMALE_WARDROBE = [
     pattern: "Solid",
     fabric: "Soft Leather",
     formality: "Smart Casual",
-    image_url: "https://images.unsplash.com/photo-1543163521-1bf539c55dd2?w=500&auto=format&fit=crop&q=60",
+    image_url: WARDROBE_IMAGES.flats,
     min_temp: 55,
     max_temp: 85,
     precipitation_resistant: false,
@@ -160,7 +195,7 @@ const FEMALE_WARDROBE = [
     pattern: "Solid",
     fabric: "100% Linen",
     formality: "Casual",
-    image_url: "https://images.unsplash.com/photo-1595777457583-95e059d581b8?w=500&auto=format&fit=crop&q=60",
+    image_url: WARDROBE_IMAGES.linenDress,
     min_temp: 60,
     max_temp: 85,
     precipitation_resistant: false,
@@ -174,7 +209,7 @@ const FEMALE_WARDROBE = [
     pattern: "Solid",
     fabric: "Organic Cotton",
     formality: "Casual",
-    image_url: "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=500&auto=format&fit=crop&q=60",
+    image_url: WARDROBE_IMAGES.crewneckTee,
     min_temp: 65,
     max_temp: 90,
     precipitation_resistant: false,
@@ -192,7 +227,7 @@ const MALE_WARDROBE = [
     pattern: "Solid",
     fabric: "Gabardine / Cotton Blend",
     formality: "Smart Casual",
-    image_url: "https://images.unsplash.com/photo-1591047139829-d91aecb6caea?w=500&auto=format&fit=crop&q=60",
+    image_url: WARDROBE_IMAGES.trenchCoat,
     min_temp: 35,
     max_temp: 60,
     precipitation_resistant: true,
@@ -206,7 +241,7 @@ const MALE_WARDROBE = [
     pattern: "Textured",
     fabric: "Merino Wool",
     formality: "Smart Casual",
-    image_url: "https://images.unsplash.com/photo-1614975058789-41316d0e2e9c?w=500&auto=format&fit=crop&q=60",
+    image_url: WARDROBE_IMAGES.ribbedSweater,
     min_temp: 20,
     max_temp: 50,
     precipitation_resistant: false,
@@ -220,7 +255,7 @@ const MALE_WARDROBE = [
     pattern: "Solid",
     fabric: "Cotton Twill",
     formality: "Smart Casual",
-    image_url: "https://images.unsplash.com/photo-1473968512647-3e447244af8f?w=500&auto=format&fit=crop&q=60",
+    image_url: WARDROBE_IMAGES.chinos,
     min_temp: 45,
     max_temp: 75,
     precipitation_resistant: false,
@@ -234,7 +269,7 @@ const MALE_WARDROBE = [
     pattern: "Solid",
     fabric: "Suede Leather",
     formality: "Smart Casual",
-    image_url: "https://images.unsplash.com/photo-1608256246200-53e635b5b65f?w=500&auto=format&fit=crop&q=60",
+    image_url: WARDROBE_IMAGES.ankleBoots,
     min_temp: 30,
     max_temp: 65,
     precipitation_resistant: false,
@@ -248,7 +283,7 @@ const MALE_WARDROBE = [
     pattern: "Solid",
     fabric: "Linen",
     formality: "Casual",
-    image_url: "https://images.unsplash.com/photo-1596755094514-f87e34085b2c?w=500&auto=format&fit=crop&q=60",
+    image_url: WARDROBE_IMAGES.linenShirt,
     min_temp: 65,
     max_temp: 85,
     precipitation_resistant: false,
@@ -262,7 +297,7 @@ const MALE_WARDROBE = [
     pattern: "Solid",
     fabric: "Wool Tweed",
     formality: "Formal",
-    image_url: "https://images.unsplash.com/photo-1507679799987-c73779587ccf?w=500&auto=format&fit=crop&q=60",
+    image_url: WARDROBE_IMAGES.blazer,
     min_temp: 40,
     max_temp: 65,
     precipitation_resistant: false,
@@ -276,7 +311,7 @@ const MALE_WARDROBE = [
     pattern: "Solid",
     fabric: "Cotton Denim",
     formality: "Casual",
-    image_url: "https://images.unsplash.com/photo-1542272604-787c3835535d?w=500&auto=format&fit=crop&q=60",
+    image_url: WARDROBE_IMAGES.highWaistedJeans,
     min_temp: 45,
     max_temp: 75,
     precipitation_resistant: false,
@@ -290,7 +325,7 @@ const MALE_WARDROBE = [
     pattern: "Solid",
     fabric: "Cotton Oxford",
     formality: "Smart Casual",
-    image_url: "https://images.unsplash.com/photo-1598033129183-c4f50c736f10?w=500&auto=format&fit=crop&q=60",
+    image_url: WARDROBE_IMAGES.satinBlouse,
     min_temp: 55,
     max_temp: 80,
     precipitation_resistant: false,
@@ -304,7 +339,7 @@ const MALE_WARDROBE = [
     pattern: "Solid",
     fabric: "Heavy Cotton Denim",
     formality: "Casual",
-    image_url: "https://images.unsplash.com/photo-1576995853123-5a10305d93c0?w=500&auto=format&fit=crop&q=60",
+    image_url: WARDROBE_IMAGES.denimJacket,
     min_temp: 50,
     max_temp: 70,
     precipitation_resistant: false,
@@ -318,7 +353,7 @@ const MALE_WARDROBE = [
     pattern: "Solid",
     fabric: "Full-Grain Leather",
     formality: "Casual",
-    image_url: "https://images.unsplash.com/photo-1549298916-b41d501d3772?w=500&auto=format&fit=crop&q=60",
+    image_url: WARDROBE_IMAGES.sneakers,
     min_temp: 45,
     max_temp: 85,
     precipitation_resistant: false,
@@ -332,7 +367,7 @@ const MALE_WARDROBE = [
     pattern: "Solid",
     fabric: "Supima Cotton",
     formality: "Casual",
-    image_url: "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=500&auto=format&fit=crop&q=60",
+    image_url: WARDROBE_IMAGES.crewneckTee,
     min_temp: 65,
     max_temp: 90,
     precipitation_resistant: false,
@@ -346,7 +381,7 @@ const MALE_WARDROBE = [
     pattern: "Solid",
     fabric: "Nappa Leather",
     formality: "Casual",
-    image_url: "https://images.unsplash.com/photo-1551028719-00167b16eac5?w=500&auto=format&fit=crop&q=60",
+    image_url: WARDROBE_IMAGES.bomberJacket,
     min_temp: 35,
     max_temp: 60,
     precipitation_resistant: false,
@@ -398,10 +433,58 @@ const MALE_SHOP_RECOMMENDATIONS = [
   }
 ];
 
+// Helper to enrich wardrobe items with KonMari attributes
+const enrichWardrobeItems = (rawItems: any[]) => {
+  const now = new Date();
+  return rawItems.map((item, index) => {
+    const enriched = { ...item };
+    
+    // Ensure joy_score is set (default to 5 or deterministic for mock items)
+    if (enriched.joy_score === undefined || enriched.joy_score === null) {
+      if (item.id === "f1" || item.id === "m1") enriched.joy_score = 3;
+      else if (item.id === "f2" || item.id === "m2") enriched.joy_score = 2;
+      else if (item.id === "f4" || item.id === "m4") enriched.joy_score = 4;
+      else if (item.id === "f5" || item.id === "m5") enriched.joy_score = 3;
+      else if (item.id === "f9" || item.id === "m9") enriched.joy_score = 2;
+      else enriched.joy_score = 5;
+    }
+
+    // Ensure last_worn_at is set
+    if (!enriched.last_worn_at) {
+      const daysAgo = 
+        item.id === "f1" || item.id === "m1" ? 400 : // Over a year
+        item.id === "f2" || item.id === "m2" ? 510 : // Over a year
+        item.id === "f5" || item.id === "m5" ? 385 : // Over a year
+        item.id === "f9" || item.id === "m9" ? 420 : // Over a year
+        (index * 25) + 15; // Recent
+      
+      const lastWornDate = new Date();
+      lastWornDate.setDate(now.getDate() - daysAgo);
+      enriched.last_worn_at = lastWornDate.toISOString();
+    }
+    
+    return enriched;
+  });
+};
+
+const formatLastWorn = (isoString?: string) => {
+  if (!isoString) return "Never worn";
+  const now = new Date();
+  const diffTime = Math.abs(now.getTime() - new Date(isoString).getTime());
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  if (diffDays <= 1) return "Today";
+  if (diffDays < 30) return `${diffDays} days ago`;
+  const diffMonths = Math.floor(diffDays / 30);
+  if (diffMonths < 12) return `${diffMonths} month${diffMonths === 1 ? "" : "s"} ago`;
+  const diffYears = (diffDays / 365).toFixed(1);
+  return `${diffYears} year${Number(diffYears) === 1.0 ? "" : "s"} ago`;
+};
+
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [isOnboarding, setIsOnboarding] = useState<boolean>(false);
   const [onboardingStep, setOnboardingStep] = useState<number>(1);
+  const [appUserId, setAppUserId] = useState<string>("");
   
   // User profile settings
   const [userProfile, setUserProfile] = useState({
@@ -414,16 +497,52 @@ export default function App() {
   });
 
   const [items, setItems] = useState<any[]>([]);
+
+  // Custom setter to always enrich items
+  const setWardrobeItems = (rawItems: any[] | ((prev: any[]) => any[])) => {
+    if (typeof rawItems === "function") {
+      setItems(prev => enrichWardrobeItems(rawItems(prev)));
+    } else {
+      setItems(enrichWardrobeItems(rawItems));
+    }
+  };
+
+  // KonMari Declutter Room States
+  const [declutterMode, setDeclutterMode] = useState<boolean>(false);
+  const [releasedItem, setReleasedItem] = useState<any>(null);
+  const [gratitudeCount, setGratitudeCount] = useState<number>(0);
+
+  // KonMari Mindfulness states
+  const [gratitudeOption, setGratitudeOption] = useState<string>("served_comfort");
+  const [customGratitude, setCustomGratitude] = useState<string>("");
+  const [ceremonyStep, setCeremonyStep] = useState<"reflect" | "breathe" | "complete">("reflect");
+  const [isBreathingIn, setIsBreathingIn] = useState<boolean>(true);
+
+  // Mindfulness breathing exercise interval
+  useEffect(() => {
+    if (ceremonyStep !== "breathe") return;
+
+    const interval = setInterval(() => {
+      setIsBreathingIn(prev => !prev);
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, [ceremonyStep]);
+
   const [activeCategory, setActiveCategory] = useState<string>("All");
   const [uploadStatus, setUploadStatus] = useState<string>(""); 
-  const [taggingResult, setTaggingResult] = useState<any>(null);
   
   // Interactive Daily OOTD Planner States
-  const [ootdScenario, setOotdScenario] = useState<string>("business-rain");
   const [ootdResult, setOotdResult] = useState<any>(null);
   const [isGeneratingOOTD, setIsGeneratingOOTD] = useState<boolean>(false);
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
   const [likedOOTD, setLikedOOTD] = useState<boolean | null>(null);
+  const [isSendingEmail, setIsSendingEmail] = useState<boolean>(false);
+  const [calendarEvents, setCalendarEvents] = useState<any[]>([]);
+  const [calendarConnected, setCalendarConnected] = useState<boolean>(false);
+  const [calendarError, setCalendarError] = useState<string | null>(null);
+  const [ootdWeather, setOotdWeather] = useState<any>(null);
+  const [plannerSource, setPlannerSource] = useState<string>("");
 
   // Virtual Try-On Modal States
   const [isTryOnModalOpen, setIsTryOnModalOpen] = useState<boolean>(false);
@@ -433,41 +552,97 @@ export default function App() {
   const [tryOnResultPhoto, setTryOnResultPhoto] = useState<string | null>(null);
   const [isSimulatingCamera, setIsSimulatingCamera] = useState<boolean>(false);
 
+  useEffect(() => {
+    const saved = window.localStorage.getItem("closet-companion-session");
+    if (!saved) return;
+
+    try {
+      const parsed = JSON.parse(saved);
+      if (parsed.userProfile) setUserProfile(parsed.userProfile);
+      if (parsed.userId) setAppUserId(parsed.userId);
+      setIsAuthenticated(true);
+    } catch {
+      window.localStorage.removeItem("closet-companion-session");
+    }
+  }, []);
+
+  const persistSession = (profile: typeof userProfile, userId: string) => {
+    window.localStorage.setItem(
+      "closet-companion-session",
+      JSON.stringify({ userProfile: profile, userId })
+    );
+  };
+
+  const getBaseWardrobe = (gender = userProfile.gender) =>
+    gender === "female" ? FEMALE_WARDROBE : MALE_WARDROBE;
+
+  const readCachedWardrobe = (userId = appUserId, email = userProfile.email) => {
+    try {
+      return JSON.parse(window.localStorage.getItem(userWardrobeStorageKey(userId, email)) || "[]");
+    } catch {
+      return [];
+    }
+  };
+
+  const cacheWardrobeItem = (item: any, userId = appUserId, email = userProfile.email) => {
+    try {
+      const cached = readCachedWardrobe(userId, email);
+      const next = mergeWardrobeItems([item], cached).slice(0, 24);
+      window.localStorage.setItem(userWardrobeStorageKey(userId, email), JSON.stringify(next));
+    } catch (error) {
+      console.warn("Could not cache wardrobe item locally.", error);
+    }
+  };
+
+  const syncProfile = async (profile = userProfile, existingUserId = appUserId) => {
+    const response = await fetch("/api/profile", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userProfile: profile, userId: existingUserId }),
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "Failed to sync profile.");
+    setAppUserId(data.userId);
+    persistSession(profile, data.userId);
+    return data.userId as string;
+  };
+
   // Initialize closet depending on selected gender
   useEffect(() => {
     if (isAuthenticated) {
-      if (userProfile.gender === "female") {
-        setItems(FEMALE_WARDROBE);
-      } else {
-        setItems(MALE_WARDROBE);
-      }
+      setWardrobeItems(mergeWardrobeItems(readCachedWardrobe(), getBaseWardrobe()));
     }
   }, [isAuthenticated, userProfile.gender]);
 
   // Fetch real Supabase closet items fallback
   useEffect(() => {
-    if (isAuthenticated) {
+    if (isAuthenticated && (appUserId || userProfile.email)) {
       fetchClosetItems();
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, appUserId, userProfile.email, userProfile.gender]);
 
   const fetchClosetItems = async () => {
     try {
-      const { data, error } = await supabase
-        .from("wardrobe_items")
-        .select("*")
-        .order("created_at", { ascending: false });
+      const params = new URLSearchParams();
+      if (appUserId) params.set("userId", appUserId);
+      if (userProfile.email) params.set("email", userProfile.email);
+      if (userProfile.fullName) params.set("fullName", userProfile.fullName);
+      if (userProfile.locationCity) params.set("city", userProfile.locationCity);
 
-      if (error) throw error;
+      const response = await fetch(`/api/wardrobe/items?${params.toString()}`);
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Failed to fetch wardrobe.");
 
-      if (data && data.length > 0) {
-        setItems(data);
-      } else {
-        setItems(userProfile.gender === "female" ? FEMALE_WARDROBE : MALE_WARDROBE);
+      if (result.userId && result.userId !== appUserId) {
+        setAppUserId(result.userId);
+        persistSession(userProfile, result.userId);
       }
-    } catch (err) {
+
+      const cached = readCachedWardrobe(result.userId || appUserId, userProfile.email);
+      setWardrobeItems(mergeWardrobeItems(result.items || [], cached, getBaseWardrobe()));
+    } catch (err: any) {
       console.error("Failed to fetch wardrobe:", err);
-      setItems(userProfile.gender === "female" ? FEMALE_WARDROBE : MALE_WARDROBE);
+      setWardrobeItems(userProfile.gender === "female" ? FEMALE_WARDROBE : MALE_WARDROBE);
     }
   };
 
@@ -477,11 +652,12 @@ export default function App() {
     if (!file) return;
 
     try {
-      setTaggingResult(null);
       setUploadStatus("uploading");
+      const currentUserId = appUserId || await syncProfile(userProfile);
 
       const formData = new FormData();
       formData.append("file", file);
+      formData.append("userId", currentUserId);
 
       const uploadResponse = await fetch("/api/wardrobe/upload", {
         method: "POST",
@@ -501,7 +677,7 @@ export default function App() {
       const tagResponse = await fetch("/api/wardrobe/tag", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ imageUrl }),
+        body: JSON.stringify({ imageUrl, userId: currentUserId, userProfile }),
       });
 
       if (!tagResponse.ok) {
@@ -510,10 +686,14 @@ export default function App() {
       }
 
       const tagData = await tagResponse.json();
-      setTaggingResult(tagData.tags);
+      if (tagData.userId && tagData.userId !== appUserId) {
+        setAppUserId(tagData.userId);
+        persistSession(userProfile, tagData.userId);
+      }
       setUploadStatus("complete");
 
-      setItems(prev => [tagData.item, ...prev]);
+      cacheWardrobeItem(tagData.item, tagData.userId || currentUserId, userProfile.email);
+      setWardrobeItems(prev => mergeWardrobeItems([tagData.item], prev));
 
       setTimeout(() => setUploadStatus(""), 4000);
     } catch (err: any) {
@@ -523,92 +703,162 @@ export default function App() {
     }
   };
 
-  // OOTD compilation
-  const compileOOTDSelection = () => {
+  // OOTD compilation backed by live weather, Google Calendar, Supabase closet, and Gemini.
+  const compileOOTDSelection = async () => {
     setIsGeneratingOOTD(true);
     setLikedOOTD(null);
 
-    setTimeout(() => {
-      let result = null;
-      if (userProfile.gender === "female") {
-        if (ootdScenario === "business-rain") {
-          result = {
-            scenario: "Executive Client Briefing",
-            weather: `50°F • Rain (85% risk) in ${userProfile.locationCity}`,
-            schedule: "09:30 AM - Executive Client Briefing",
-            items: ["f6", "f4", "f1"], 
-            reasoning: `To support your presence at your Executive Briefing in wet 50°F weather, we selected your rich Emerald Green Satin Blouse paired with the Pleated Skirt. Over that, the beige Gabardine Trench Coat provides elegant wind and rain protection, ensuring you arrive warm, dry, and highly polished.`
-          };
-        } else if (ootdScenario === "casual-sunny") {
-          result = {
-            scenario: "Outdoor Team Brunch Social",
-            weather: `72°F • Sunny in ${userProfile.locationCity}`,
-            schedule: "11:30 AM - Outdoor Team Brunch Social",
-            items: ["f3", "f5"], 
-            reasoning: `For a warm, sun-kissed 72°F afternoon meeting, we styled your Soft Pink Floral Sun Dress. Its lightweight, comfortable silk-blend fabric offers superb breathability, while the Tan Suede Chelsea Boots keep the look highly curated and transition-ready.`
-          };
-        } else {
-          result = {
-            scenario: "Evening Technical Review & Write-up",
-            weather: `38°F • Chilly Dusk in ${userProfile.locationCity}`,
-            schedule: "6:00 PM - Research Sync at Coffee Lounge",
-            items: ["f2", "f4", "f5"], 
-            reasoning: `To keep you warm for your chilly 38°F evening session, we matched the heavy Cream Knit Cardigan with your Crepe Midi Skirt. Complete the combination with your Tan Chelsea boots to maintain a smart, classic aesthetic while feeling thoroughly insulated.`
-          };
-        }
-      } else {
-        if (ootdScenario === "business-rain") {
-          result = {
-            scenario: "Venture Showcase Pitch",
-            weather: `50°F • Rain (85% risk) in ${userProfile.locationCity}`,
-            schedule: "10:00 AM - Venture Showcase Pitch",
-            items: ["m6", "m3", "m1"], 
-            reasoning: `To represent absolute confidence in damp 50°F weather for your Showcase Pitch, we styled your structured Forest Green Tweed Blazer over Navy Cotton Chinos. Layering with your beige Gabardine Trench Coat provides robust weather protection to ensure a clean, dry arrival.`
-          };
-        } else if (ootdScenario === "casual-sunny") {
-          result = {
-            scenario: "Outdoor Team Brunch Celebration",
-            weather: `72°F • Sunny in ${userProfile.locationCity}`,
-            schedule: "11:30 AM - Open-Air Team Lunch",
-            items: ["m5", "m3"], 
-            reasoning: `Under clear blue skies and a high of 72°F for your lunch event, we combined your breathable White Linen Shirt with Navy Chinos. It creates a classic, effortlessly tailored summer silhouette that is breathable and sophisticated.`
-          };
-        } else {
-          result = {
-            scenario: "Evening Research & Write-up",
-            weather: `38°F • Cold Breeze in ${userProfile.locationCity}`,
-            schedule: "5:00 PM - Late Technical Writing Sync",
-            items: ["m2", "m3", "m4"], 
-            reasoning: `For your 38°F evening sync, the Merino Wool Charcoal Sweater provides dense heat insulation. Combining it with Navy Cotton Chinos and Leather Chelsea Boots guarantees you stay thoroughly warm, comfortable, and focused on the work.`
-          };
-        }
-      }
+    try {
+      const response = await fetch("/api/ootd/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: appUserId,
+          userProfile,
+          closetItems: items,
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Failed to generate outfit.");
 
-      setOotdResult(result);
-      setSelectedItems(result.items);
+      const primaryOutfit = data.outfits?.[0];
+      if (!primaryOutfit) throw new Error("The planner did not return an outfit.");
+
+      const itemDetails = Array.isArray(primaryOutfit.items) ? primaryOutfit.items : [];
+      const itemIds = itemDetails.map((item: any) => item.id).filter(Boolean);
+      const normalizedResult = {
+        ...primaryOutfit,
+        scenario: primaryOutfit.scenario || primaryOutfit.context || "Today's Outfit",
+        schedule: primaryOutfit.schedule || (data.calendar || []).map((event: any) => `${event.time} - ${event.title}`).join(" · "),
+        weather: primaryOutfit.weather || `${data.weather?.temp}°F • ${data.weather?.condition} in ${data.weather?.city}`,
+        reasoning: primaryOutfit.reasoning || primaryOutfit.stylingReasoning,
+        itemDetails,
+        items: itemIds,
+      };
+
+      setOotdResult(normalizedResult);
+      setSelectedItems(itemIds);
+      setCalendarEvents(data.calendar || []);
+      setCalendarConnected(Boolean(data.calendarConnected));
+      setCalendarError(data.calendarError || null);
+      setOotdWeather(data.weather || null);
+      setPlannerSource(data.plannerSource || "");
+      if (data.userId && data.userId !== appUserId) {
+        setAppUserId(data.userId);
+        persistSession(userProfile, data.userId);
+      }
+    } catch (err: any) {
+      console.error("OOTD generation failed:", err);
+      alert(err.message || "Failed to generate today's outfit.");
+    } finally {
       setIsGeneratingOOTD(false);
-    }, 1200);
+    }
   };
 
   useEffect(() => {
-    if (isAuthenticated) {
+    if (isAuthenticated && items.length > 0) {
       compileOOTDSelection();
     }
-  }, [ootdScenario, isAuthenticated]);
+  }, [isAuthenticated, appUserId, items.length]);
 
   const handleDeleteItem = async (id: string) => {
     if (id.startsWith("m") || id.startsWith("f")) {
-      setItems(prev => prev.filter(item => item.id !== id));
+      setWardrobeItems(prev => prev.filter(item => item.id !== id));
       return;
     }
 
     try {
-      const { error } = await supabase.from("wardrobe_items").delete().eq("id", id);
-      if (error) throw error;
-      setItems(prev => prev.filter(item => item.id !== id));
-    } catch (err) {
+      const response = await fetch("/api/wardrobe/items", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, userId: appUserId }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Failed to delete item.");
+      setWardrobeItems(prev => prev.filter(item => item.id !== id));
+    } catch (err: any) {
       console.error("Failed to delete:", err);
     }
+  };
+
+  const updateItemJoyScore = async (id: string, score: number) => {
+    // 1. Update state immediately for optimal UX
+    setWardrobeItems(prev => prev.map(item => item.id === id ? { ...item, joy_score: score } : item));
+
+    // If it's a default mock item, we don't need to write to Supabase (or we can write if we have synced it)
+    if (id.startsWith("m") || id.startsWith("f")) {
+      // Local cache update
+      try {
+        const cached = readCachedWardrobe();
+        const updatedCache = cached.map((item: any) => item.id === id ? { ...item, joy_score: score } : item);
+        window.localStorage.setItem(userWardrobeStorageKey(appUserId, userProfile.email), JSON.stringify(updatedCache));
+      } catch (err) {
+        console.warn("Could not cache joy score locally:", err);
+      }
+      return;
+    }
+
+    // 2. Call PUT API
+    try {
+      const response = await fetch("/api/wardrobe/items", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, userId: appUserId, joy_score: score }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        console.warn("Could not sync joy score update to server, using local fallback:", data.warning);
+      }
+    } catch (err) {
+      console.warn("Could not sync joy score update to server, using local fallback:", err);
+    }
+  };
+
+  const markItemWornToday = async (id: string) => {
+    const todayIso = new Date().toISOString();
+    setWardrobeItems(prev => prev.map(item => item.id === id ? { ...item, last_worn_at: todayIso } : item));
+
+    if (id.startsWith("m") || id.startsWith("f")) {
+      try {
+        const cached = readCachedWardrobe();
+        const updatedCache = cached.map((item: any) => item.id === id ? { ...item, last_worn_at: todayIso } : item);
+        window.localStorage.setItem(userWardrobeStorageKey(appUserId, userProfile.email), JSON.stringify(updatedCache));
+      } catch (err) {
+        console.warn("Could not cache wear date locally:", err);
+      }
+      return;
+    }
+
+    try {
+      const response = await fetch("/api/wardrobe/items", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, userId: appUserId, last_worn_at: todayIso }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        console.warn("Could not sync last worn update to server, using local fallback:", data.warning);
+      }
+    } catch (err) {
+      console.warn("Could not sync last worn update to server, using local fallback:", err);
+    }
+  };
+
+  const handleStartReleaseCeremony = (item: any) => {
+    setReleasedItem(item);
+    setGratitudeOption("served_comfort");
+    setCustomGratitude("");
+    setCeremonyStep("reflect");
+    setIsBreathingIn(true);
+  };
+
+  const handleCompleteReleaseCeremony = async () => {
+    if (!releasedItem) return;
+    
+    const itemId = releasedItem.id;
+    await handleDeleteItem(itemId);
+    setGratitudeCount(prev => prev + 1);
+    setReleasedItem(null);
   };
 
   const filteredItems = activeCategory === "All"
@@ -618,34 +868,119 @@ export default function App() {
   // Handle onboarding submission
   const handleOnboardingSubmit = async () => {
     try {
+      const userId = await syncProfile(userProfile);
+      setAppUserId(userId);
       setIsOnboarding(false);
       setIsAuthenticated(true);
-      
-      await supabase
-        .from("profiles")
-        .upsert({
-          id: "00000000-0000-0000-0000-000000000000",
-          full_name: userProfile.fullName || "Style Partner",
-          location_city: userProfile.locationCity,
-          temperature_unit: "F",
-          budget_cap_usd: userProfile.budgetLimit
-        });
-    } catch (err) {
+    } catch (err: any) {
       console.error("Failed to sync profile to database", err);
+      alert(err.message || "Failed to create profile.");
     }
   };
 
+  // Dispatch real-time styling digest email via Resend API
+  const handleSendEmail = async () => {
+    if (!userProfile.email) {
+      alert("Please ensure your registered email address is set in your profile settings.");
+      return;
+    }
+    if (!ootdResult) {
+      alert("No curated outfit is currently loaded. Please select an event scenario first.");
+      return;
+    }
+
+    setIsSendingEmail(true);
+    try {
+      const response = await fetch("/api/ootd/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: userProfile.email,
+          ootdResult: {
+            ...ootdResult,
+            items: ootdResult.itemDetails?.length
+              ? ootdResult.itemDetails
+              : selectedItems.map(id => items.find(item => item.id === id)).filter(Boolean),
+          },
+          userProfile,
+          weather: ootdWeather,
+          calendar: calendarEvents,
+        })
+      });
+      const data = await response.json();
+      if (response.ok) {
+        alert(`✨ ${data.message || 'Style digest email dispatched successfully!'}`);
+      } else {
+        alert(`❌ ${data.error || 'Failed to dispatch email.'}`);
+      }
+    } catch (err: any) {
+      console.error("Email dispatch failed:", err);
+      alert(`❌ Error dispatching email: ${err.message}`);
+    } finally {
+      setIsSendingEmail(false);
+    }
+  };
+
+  const submitOOTDFeedback = async (liked: boolean) => {
+    setLikedOOTD(liked);
+    if (!selectedItems.length) return;
+
+    try {
+      await fetch("/api/ootd/feedback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: appUserId,
+          userProfile,
+          itemIds: selectedItems,
+          liked,
+          dislikeReason: liked ? null : "User marked this outfit as not matching their style.",
+        }),
+      });
+    } catch (err) {
+      console.error("Failed to submit outfit feedback:", err);
+    }
+  };
+
+  const handleConnectCalendar = async () => {
+    try {
+      const response = await fetch("/api/google/auth-url?returnTo=/");
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Failed to start Google Calendar connection.");
+      window.location.href = data.url;
+    } catch (err: any) {
+      alert(err.message || "Failed to connect Google Calendar.");
+    }
+  };
+
+  const handleDisconnectCalendar = async () => {
+    await fetch("/api/google/disconnect", { method: "POST" });
+    setCalendarConnected(false);
+    setCalendarEvents([]);
+    setCalendarError(null);
+    compileOOTDSelection();
+  };
+
   // Handle simulated login
-  const handleMockLogin = () => {
-    setUserProfile({
+  const handleMockLogin = async () => {
+    const profile = {
       fullName: "Vagisha Tyagi",
       email: "vagisha.tyagi001@gmail.com",
       gender: "female",
       locationCity: "New York",
       budgetLimit: 120,
       preferredAesthetics: ["Classic Minimalist", "Academia"]
-    });
-    setIsAuthenticated(true);
+    };
+
+    try {
+      const userId = await syncProfile(profile);
+      setUserProfile(profile);
+      setAppUserId(userId);
+      setIsAuthenticated(true);
+    } catch (err: any) {
+      console.error("Demo sign-in failed:", err);
+      alert(err.message || "Demo sign-in failed.");
+    }
   };
 
   // Virtual Try-On flow simulation
@@ -654,15 +989,6 @@ export default function App() {
     setTryOnPhoto(null);
     setTryOnStep("choose");
     setIsTryOnModalOpen(true);
-  };
-
-  const startCameraSimulation = () => {
-    setIsSimulatingCamera(true);
-    setTimeout(() => {
-      // Set premium mock user selfie
-      setTryOnPhoto("https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&auto=format&fit=crop&q=80");
-      setIsSimulatingCamera(false);
-    }, 1500);
   };
 
   const executeTryOnGeneration = async () => {
@@ -1068,7 +1394,13 @@ export default function App() {
                 </div>
                 
                 <button
-                  onClick={() => setIsAuthenticated(false)}
+                  onClick={() => {
+                    window.localStorage.removeItem("closet-companion-session");
+                    setIsAuthenticated(false);
+                    setAppUserId("");
+                    setOotdResult(null);
+                    setSelectedItems([]);
+                  }}
                   className="text-xs font-semibold px-4 py-2 rounded-lg border border-slate-800 hover:border-slate-700 bg-slate-900/40 hover:bg-slate-900 transition-all text-slate-400 hover:text-white cursor-pointer"
                 >
                   Log Out
@@ -1086,31 +1418,42 @@ export default function App() {
                     </div>
                     <div>
                       <h4 className="text-sm font-bold text-amber-200 flex items-center gap-1.5">
-                        Upcoming Google Calendar Event
-                        <span className="text-[10px] bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded-full border border-amber-500/20">Synced</span>
+                        Google Calendar Context
+                        <span className={`text-[10px] px-2 py-0.5 rounded-full border ${
+                          calendarConnected
+                            ? "bg-emerald-500/15 text-emerald-300 border-emerald-500/20"
+                            : "bg-amber-500/20 text-amber-300 border-amber-500/20"
+                        }`}>
+                          {calendarConnected ? "Connected" : "Not connected"}
+                        </span>
                       </h4>
                       <p className="text-xs text-slate-300 mt-1">
-                        We found a meeting scheduled for today: <span className="text-white font-semibold">"
-                          {userProfile.email === "devstar7440@gcplab.me" 
-                            ? "Team Styling Sync" 
-                            : (userProfile.gender === "female" ? "Executive Client Briefing" : "Venture Showcase Pitch")}
-                        "</span> ({userProfile.email === "devstar7440@gcplab.me" ? "04:45 PM PST" : "09:30 AM"}).
+                        {calendarConnected && calendarEvents.length > 0 ? (
+                          <>
+                            {String(calendarEvents[0].source || "").includes(":upcoming:") ? "Upcoming event" : "Today's first event"}: <span className="text-white font-semibold">&quot;{calendarEvents[0].title}&quot;</span> ({calendarEvents[0].time}).
+                          </>
+                        ) : calendarConnected ? (
+                          "Calendar is connected and no events were found today. The planner will optimize for weather and your closet."
+                        ) : (
+                          "Connect Google Calendar so outfits adapt to your real meetings, workouts, meals, and social plans instead of canned demo events."
+                        )}
+                        {calendarError && <span className="block text-red-300 mt-1">{calendarError}</span>}
                       </p>
                     </div>
                   </div>
                   <button 
-                    onClick={() => setOotdScenario("business-rain")}
+                    onClick={calendarConnected ? compileOOTDSelection : handleConnectCalendar}
                     className="px-5 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs rounded-xl shadow-lg shadow-amber-500/15 transition-all self-start md:self-auto cursor-pointer"
                   >
-                    Suggest Outfit for Event
+                    {calendarConnected ? "Refresh Outfit Context" : "Connect Google Calendar"}
                   </button>
                 </div>
 
                 {/* Suggested Outfit Preview */}
                 <div className="border-t border-amber-900/30 pt-4 mt-1">
-                  <span className="text-[10px] uppercase font-bold text-amber-400 tracking-wider">Suggested Outfit for this Event:</span>
+                  <span className="text-[10px] uppercase font-bold text-amber-400 tracking-wider">Current Outfit Pieces:</span>
                   <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-4 mt-3">
-                    {items.filter(it => (userProfile.gender === "female" ? ["f6", "f4", "f1"] : ["m6", "m3", "m1"]).includes(it.id)).map(it => (
+                    {items.filter(it => selectedItems.includes(it.id)).map(it => (
                       <div key={it.id} className="flex items-center gap-2 bg-slate-950/60 border border-slate-900 rounded-lg p-2">
                         <img src={it.image_url} alt={it.sub_category} className="w-8 h-10 object-cover rounded-md bg-slate-900 shrink-0" />
                         <div className="flex flex-col min-w-0">
@@ -1119,6 +1462,11 @@ export default function App() {
                         </div>
                       </div>
                     ))}
+                    {selectedItems.length === 0 && (
+                      <div className="text-[11px] text-slate-400 col-span-full">
+                        Generate a daily outfit to see the selected pieces here.
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -1168,100 +1516,297 @@ export default function App() {
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                     <div>
                       <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                        <Filter className="h-4.5 w-4.5 text-purple-400" /> Your Wardrobe Closet
+                        {declutterMode ? (
+                          <>
+                            <Sparkles className="h-4.5 w-4.5 text-rose-300 animate-pulse" />
+                            <span>KonMari Declutter Room</span>
+                          </>
+                        ) : (
+                          <>
+                            <Filter className="h-4.5 w-4.5 text-purple-400" />
+                            <span>Your Wardrobe Closet</span>
+                          </>
+                        )}
                       </h3>
                       <p className="text-xs text-slate-400">
-                        Showing {filteredItems.length} items cataloged.
+                        {declutterMode 
+                          ? "Reflect on your wardrobe to keep only those garments that spark true joy."
+                          : `Showing ${filteredItems.length} items cataloged.`
+                        }
                       </p>
                     </div>
 
-                    {/* Categories Selector */}
-                    <div className="flex flex-wrap gap-1.5 bg-slate-950 border border-slate-900/60 p-1.2 rounded-xl">
-                      {["All", "Top", "Bottom", "Outerwear", "Footwear"].map(cat => (
-                        <button
-                          key={cat}
-                          onClick={() => setActiveCategory(cat)}
-                          className={`text-xs font-medium px-3.5 py-1.5 rounded-lg transition-all ${
-                            activeCategory === cat
-                              ? "bg-purple-600 text-white shadow-md shadow-purple-600/10"
-                              : "text-slate-400 hover:text-slate-200 hover:bg-slate-900/60"
-                          }`}
-                        >
-                          {cat}
-                        </button>
-                      ))}
+                    <div className="flex flex-wrap items-center gap-3">
+                      <button
+                        onClick={() => setDeclutterMode(!declutterMode)}
+                        className={`flex items-center gap-2 px-4 py-2 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
+                          declutterMode
+                            ? "bg-gradient-to-r from-rose-500 to-purple-600 border-rose-400 text-white shadow-lg shadow-purple-500/20"
+                            : "bg-slate-950/80 border-slate-800 text-purple-400 hover:text-white hover:border-purple-500/50 hover:bg-purple-950/25"
+                        }`}
+                      >
+                        <Sparkle className="h-3.5 w-3.5" />
+                        {declutterMode ? "Return to Closet" : "🌸 KonMari Declutter Room"}
+                      </button>
+
+                      {!declutterMode && (
+                        <div className="flex flex-wrap gap-1.5 bg-slate-950 border border-slate-900/60 p-1 rounded-xl">
+                          {["All", "Top", "Bottom", "Outerwear", "Footwear"].map(cat => (
+                            <button
+                              key={cat}
+                              onClick={() => setActiveCategory(cat)}
+                              className={`text-xs font-medium px-3.5 py-1.5 rounded-lg transition-all ${
+                                activeCategory === cat
+                                  ? "bg-purple-600 text-white shadow-md shadow-purple-600/10"
+                                  : "text-slate-400 hover:text-slate-200 hover:bg-slate-900/60"
+                              }`}
+                            >
+                              {cat}
+                            </button>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </div>
 
-                  {/* Closet Cards Grid */}
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
-                    {filteredItems.map(item => {
-                      const isSelected = selectedItems.includes(item.id);
-                      return (
-                        <motion.div
-                          key={item.id}
-                          layout
-                          whileHover={{ y: -4 }}
-                          className={`group relative rounded-xl overflow-hidden border bg-slate-900/20 backdrop-blur-sm transition-all flex flex-col ${
-                            isSelected 
-                              ? "border-purple-500 ring-2 ring-purple-500/20" 
-                              : "border-slate-800/80 hover:border-slate-700"
-                          }`}
-                        >
-                          {/* Clothing Thumbnail */}
-                          <div className="w-full aspect-[4/5] relative bg-slate-950 overflow-hidden">
-                            <img
-                              src={item.image_url}
-                              alt={item.sub_category}
-                              className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-                              loading="lazy"
-                            />
-                            
-                            {/* Delete Button overlay */}
-                            <button
-                              onClick={() => handleDeleteItem(item.id)}
-                              className="absolute top-2 right-2 p-1.5 rounded-md bg-slate-950/80 border border-slate-800 text-slate-400 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100 backdrop-blur-md"
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </button>
+                  {declutterMode ? (
+                    /* DECLUTTER ROOM WORKSPACE */
+                    <div className="flex flex-col gap-6 bg-slate-900/10 border border-slate-850/80 p-6 rounded-2xl backdrop-blur-xl relative overflow-hidden">
+                      {/* Gentle decorative ambient background glow */}
+                      <div className="absolute top-0 right-0 -mr-24 -mt-24 h-96 w-96 rounded-full bg-rose-500/5 blur-3xl pointer-events-none" />
+                      <div className="absolute bottom-0 left-0 -ml-24 -mb-24 h-96 w-96 rounded-full bg-purple-500/5 blur-3xl pointer-events-none" />
 
-                            {/* category badge */}
-                            <span className="absolute bottom-2 left-2 text-[8px] uppercase tracking-widest font-bold px-2 py-0.5 rounded-md bg-slate-950/70 border border-slate-800 text-purple-400 backdrop-blur-md">
-                              {item.category}
-                            </span>
+                      {/* Header Quote Card */}
+                      <div className="relative border border-purple-900/20 bg-purple-950/5 rounded-xl p-5 flex flex-col sm:flex-row items-center gap-4">
+                        <div className="h-10 w-10 rounded-full bg-purple-950/40 border border-purple-800/20 flex items-center justify-center shrink-0">
+                          <Sparkle className="h-5 w-5 text-purple-400 animate-pulse" />
+                        </div>
+                        <div>
+                          <p className="text-xs text-purple-200 italic leading-relaxed font-medium">
+                            &quot;The question of what you want to own is actually the question of how you want to live your life. Keep only those things that speak to your heart, and thank those that have served their purpose.&quot;
+                          </p>
+                          <span className="text-[10px] text-purple-400 font-bold uppercase mt-1 block tracking-wider">— Marie Kondo (KonMari Strategy)</span>
+                        </div>
+                      </div>
+
+                      {/* Mindful Declutter Metrics */}
+                      <div className="grid grid-cols-3 gap-4">
+                        <div className="rounded-xl border border-slate-900 bg-slate-950/60 p-4">
+                          <span className="text-[9px] uppercase font-bold tracking-wider text-slate-500">Total Closet</span>
+                          <p className="text-lg font-bold text-white mt-1">{items.length} garments</p>
+                        </div>
+                        <div className="rounded-xl border border-slate-900 bg-slate-950/60 p-4">
+                          <span className="text-[9px] uppercase font-bold tracking-wider text-slate-500">Unworn &gt; 1 Year</span>
+                          <p className="text-lg font-bold text-rose-300 mt-1">
+                            {(() => {
+                              const oneYearAgo = new Date();
+                              oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+                              return items.filter(it => it.last_worn_at && new Date(it.last_worn_at) < oneYearAgo).length;
+                            })()}{" "}
+                            items
+                          </p>
+                        </div>
+                        <div className="rounded-xl border border-slate-900 bg-slate-950/60 p-4">
+                          <span className="text-[9px] uppercase font-bold tracking-wider text-slate-500">Released</span>
+                          <p className="text-lg font-bold text-emerald-300 mt-1">{gratitudeCount} items</p>
+                        </div>
+                      </div>
+
+                      {/* Items to Declutter */}
+                      <div className="flex flex-col gap-4 mt-2">
+                        <h4 className="text-xs font-bold text-slate-300 tracking-wider uppercase">
+                          🌸 Reflect on Your Garments
+                        </h4>
+                        
+                        {items.length === 0 ? (
+                          <div className="text-xs text-slate-400 text-center py-8">
+                            Your wardrobe is empty. Upload some closet photos first!
                           </div>
+                        ) : (
+                          <div className="flex flex-col gap-4">
+                            {items.map(item => {
+                              const oneYearAgo = new Date();
+                              oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+                              const isUnwornOverYear = item.last_worn_at && new Date(item.last_worn_at) < oneYearAgo;
+                              
+                              return (
+                                <motion.div
+                                  key={item.id}
+                                  layout
+                                  className="flex flex-col sm:flex-row gap-5 p-4 rounded-xl border border-slate-900 bg-slate-950/20 hover:border-slate-800 transition-all items-start sm:items-center justify-between"
+                                >
+                                  {/* Item Photo & Details */}
+                                  <div className="flex gap-4 items-center w-full sm:w-auto">
+                                    <div className="w-16 h-20 relative bg-slate-900 rounded-lg overflow-hidden shrink-0 border border-slate-850">
+                                      <img src={item.image_url} alt={item.sub_category} className="w-full h-full object-cover" />
+                                      <span className="absolute bottom-1 left-1 text-[7px] uppercase font-bold px-1.5 py-0.2 bg-slate-950/80 border border-slate-900 text-purple-400 rounded">
+                                        {item.category}
+                                      </span>
+                                    </div>
+                                    <div className="flex flex-col gap-1 min-w-0">
+                                      <h5 className="font-semibold text-xs text-white tracking-tight">{item.sub_category}</h5>
+                                      <div className="flex items-center gap-1.5">
+                                        <span className="text-[9px] text-slate-400 bg-slate-950 px-1.5 py-0.5 rounded border border-slate-900">
+                                          {item.color_family}
+                                        </span>
+                                        <span className="text-[9px] text-slate-400 bg-slate-950 px-1.5 py-0.5 rounded border border-slate-900">
+                                          {item.fabric}
+                                        </span>
+                                      </div>
+                                      
+                                      <span className="text-[10px] text-slate-400 mt-1 flex items-center gap-1">
+                                        ⏳ Last Worn: <strong className="text-slate-200">{formatLastWorn(item.last_worn_at)}</strong>
+                                      </span>
+                                    </div>
+                                  </div>
 
-                          {/* Meta Details */}
-                          <div className="p-4 flex flex-col gap-1.5 flex-1 justify-between">
-                            <div>
-                              <h4 className="font-semibold text-xs text-white tracking-wide">
-                                {item.sub_category}
-                              </h4>
-                              <div className="flex flex-wrap gap-1 mt-1.5">
-                                <span className="text-[9px] text-slate-400 bg-slate-950 border border-slate-900 rounded px-1.5 py-0.5">
-                                  {item.color_family}
+                                  {/* Scoring & Recommendations */}
+                                  <div className="flex flex-col gap-2.5 w-full sm:w-auto sm:items-end shrink-0 mt-3 sm:mt-0">
+                                    {/* Sparks Joy Interactive Stars */}
+                                    <div className="flex flex-col gap-1 sm:items-end">
+                                      <span className="text-[8px] uppercase tracking-wider font-bold text-slate-500 flex items-center gap-1">
+                                        Sparks Joy?
+                                        <span className="text-[10px] text-yellow-400 font-semibold">
+                                          {item.joy_score === 1 && " (💔 No Joy)"}
+                                          {item.joy_score === 2 && " (🌸 Low Joy)"}
+                                          {item.joy_score === 3 && " (⭐️ Neutral)"}
+                                          {item.joy_score === 4 && " (✨ Sparks Joy!)"}
+                                          {item.joy_score === 5 && " (💖 Sparks Immense Joy!)"}
+                                        </span>
+                                      </span>
+                                      <div className="flex gap-1">
+                                        {[1, 2, 3, 4, 5].map(star => (
+                                          <button
+                                            key={star}
+                                            onClick={() => updateItemJoyScore(item.id, star)}
+                                            className="text-slate-600 hover:text-yellow-400 transition-colors cursor-pointer"
+                                          >
+                                            <svg
+                                              xmlns="http://www.w3.org/2000/svg"
+                                              className={`h-4.5 w-4.5 ${
+                                                star <= (item.joy_score || 5)
+                                                  ? "fill-yellow-400 text-yellow-400"
+                                                  : "text-slate-700"
+                                              }`}
+                                              viewBox="0 0 24 24"
+                                              stroke="currentColor"
+                                              strokeWidth="2"
+                                            >
+                                              <path
+                                                strokeLinecap="round"
+                                                strokeLinejoin="round"
+                                                d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.907c.961 0 1.36 1.246.588 1.81l-3.97 2.883a1 1 0 00-.364 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.971-2.883a1 1 0 00-1.178 0l-3.97 2.883c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.364-1.118L2.98 10.1c-.773-.564-.374-1.81.588-1.81h4.908a1 1 0 00.95-.69l1.519-4.674z"
+                                              />
+                                            </svg>
+                                          </button>
+                                        ))}
+                                      </div>
+                                    </div>
+
+                                    {/* Action row & Warnings */}
+                                    <div className="flex flex-col sm:items-end gap-1.5">
+                                      {isUnwornOverYear && (
+                                        <span className="text-[9px] text-rose-300 bg-rose-950/20 px-2 py-0.5 rounded border border-rose-900/30 font-medium">
+                                          🌸 Unworn over a year: Recommended to Donate
+                                        </span>
+                                      )}
+
+                                      <div className="flex gap-2.5 items-center mt-1">
+                                        <button
+                                          onClick={() => markItemWornToday(item.id)}
+                                          className="text-[9px] font-bold text-slate-300 hover:text-white px-2.5 py-1.5 bg-slate-900 border border-slate-800 hover:border-slate-700 rounded-md transition-all cursor-pointer flex items-center gap-1"
+                                          title="Reset wear date to today"
+                                        >
+                                          Mark Worn
+                                        </button>
+                                        
+                                        <button
+                                          onClick={() => handleStartReleaseCeremony(item)}
+                                          className="text-[9px] font-bold text-rose-300 hover:text-white px-2.5 py-1.5 bg-rose-950/20 border border-rose-900/30 hover:bg-rose-950/40 rounded-md transition-all cursor-pointer flex items-center gap-1"
+                                        >
+                                          Thank &amp; Release
+                                        </button>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </motion.div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    /* Closet Cards Grid */
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
+                      {filteredItems.map(item => {
+                        const isSelected = selectedItems.includes(item.id);
+                        return (
+                          <motion.div
+                            key={item.id}
+                            layout
+                            whileHover={{ y: -4 }}
+                            className={`group relative rounded-xl overflow-hidden border bg-slate-900/20 backdrop-blur-sm transition-all flex flex-col ${
+                              isSelected 
+                                ? "border-purple-500 ring-2 ring-purple-500/20" 
+                                : "border-slate-800/80 hover:border-slate-700"
+                            }`}
+                          >
+                            {/* Clothing Thumbnail */}
+                            <div className="w-full aspect-[4/5] relative bg-slate-950 overflow-hidden">
+                              <img
+                                src={item.image_url}
+                                alt={item.sub_category}
+                                className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                                loading="lazy"
+                              />
+                              
+                              {/* Delete Button overlay */}
+                              <button
+                                onClick={() => handleDeleteItem(item.id)}
+                                className="absolute top-2 right-2 p-1.5 rounded-md bg-slate-950/80 border border-slate-800 text-slate-400 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100 backdrop-blur-md"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+
+                              {/* category badge */}
+                              <span className="absolute bottom-2 left-2 text-[8px] uppercase tracking-widest font-bold px-2 py-0.5 rounded-md bg-slate-950/70 border border-slate-800 text-purple-400 backdrop-blur-md">
+                                {item.category}
+                              </span>
+                            </div>
+
+                            {/* Meta Details */}
+                            <div className="p-4 flex flex-col gap-1.5 flex-1 justify-between">
+                              <div>
+                                <h4 className="font-semibold text-xs text-white tracking-wide">
+                                  {item.sub_category}
+                                </h4>
+                                <div className="flex flex-wrap gap-1 mt-1.5">
+                                  <span className="text-[9px] text-slate-400 bg-slate-950 border border-slate-900 rounded px-1.5 py-0.5">
+                                    {item.color_family}
+                                  </span>
+                                  <span className="text-[9px] text-slate-400 bg-slate-950 border border-slate-900 rounded px-1.5 py-0.5">
+                                    {item.fabric}
+                                  </span>
+                                </div>
+                              </div>
+
+                              <div className="pt-3 border-t border-slate-800/40 mt-3 flex items-center justify-between">
+                                <span className="text-[9px] text-slate-400">
+                                  {item.formality} • {item.min_temp}°F-{item.max_temp}°F
                                 </span>
-                                <span className="text-[9px] text-slate-400 bg-slate-950 border border-slate-900 rounded px-1.5 py-0.5">
-                                  {item.fabric}
-                                </span>
+                                {isSelected && (
+                                  <span className="text-[8px] uppercase font-bold text-purple-400 flex items-center gap-0.5">
+                                    <CheckCircle2 className="h-2.5 w-2.5" /> Curated
+                                  </span>
+                                )}
                               </div>
                             </div>
-
-                            <div className="pt-3 border-t border-slate-800/40 mt-3 flex items-center justify-between">
-                              <span className="text-[9px] text-slate-400">
-                                {item.formality} • {item.min_temp}°F-{item.max_temp}°F
-                              </span>
-                              {isSelected && (
-                                <span className="text-[8px] uppercase font-bold text-purple-400 flex items-center gap-0.5">
-                                  <CheckCircle2 className="h-2.5 w-2.5" /> Curated
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        </motion.div>
-                      );
-                    })}
-                  </div>
+                          </motion.div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               </section>
 
@@ -1281,38 +1826,49 @@ export default function App() {
                       Your Daily Style Planner
                     </h3>
                     <p className="text-xs text-slate-400 leading-relaxed">
-                      Choose a schedule preset to see how the outfit planner structures your look based on weather and active meetings.
+                      Generates a live outfit from your current closet, local weather, calendar events, and previous feedback.
                     </p>
                   </div>
 
-                  {/* Presets Select Menu */}
-                  <div className="flex flex-col gap-2">
-                    <label className="text-[10px] uppercase font-semibold text-slate-500 tracking-wider">
-                      Select Event Preset
-                    </label>
-                    <div className="grid grid-cols-1 gap-2">
-                      {[
-                        { id: "business-rain", label: "Executive Briefing (Rainy, 50°F)", icon: Calendar },
-                        { id: "casual-sunny", label: "Outdoor Team Brunch (Sunny, 72°F)", icon: Sun },
-                        { id: "study-cold", label: "Research Sync (Chilly, 38°F)", icon: Clock }
-                      ].map(preset => {
-                        const Icon = preset.icon;
-                        return (
-                          <button
-                            key={preset.id}
-                            onClick={() => setOotdScenario(preset.id)}
-                            className={`flex items-center gap-3 p-3 rounded-xl border text-left transition-all cursor-pointer ${
-                              ootdScenario === preset.id
-                                ? "bg-purple-600/10 border-purple-500/80 text-white"
-                                : "bg-slate-950/40 border-slate-900 text-slate-400 hover:border-slate-800 hover:text-slate-200"
-                            }`}
-                          >
-                            <Icon className={`h-4.5 w-4.5 ${ootdScenario === preset.id ? "text-purple-400" : "text-slate-500"}`} />
-                            <span className="text-xs font-semibold">{preset.label}</span>
-                          </button>
-                        );
-                      })}
+                  {/* Live Context Controls */}
+                  <div className="flex flex-col gap-3">
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="rounded-xl border border-slate-900 bg-slate-950/40 p-3">
+                        <span className="text-[9px] uppercase font-bold tracking-wider text-slate-500">Weather</span>
+                        <p className="text-xs font-semibold text-slate-200 mt-1">
+                          {ootdWeather ? `${ootdWeather.temp}°F • ${ootdWeather.condition}` : "Loading"}
+                        </p>
+                      </div>
+                      <div className="rounded-xl border border-slate-900 bg-slate-950/40 p-3">
+                        <span className="text-[9px] uppercase font-bold tracking-wider text-slate-500">Calendar</span>
+                        <p className="text-xs font-semibold text-slate-200 mt-1">
+                          {calendarConnected ? `${calendarEvents.length} event${calendarEvents.length === 1 ? "" : "s"}` : "Not connected"}
+                        </p>
+                      </div>
                     </div>
+
+                    <div className="grid grid-cols-1 gap-2">
+                      <button
+                        onClick={compileOOTDSelection}
+                        disabled={isGeneratingOOTD}
+                        className="flex items-center justify-center gap-2 p-3 rounded-xl border border-purple-500/50 bg-purple-600/10 text-white hover:bg-purple-600/20 transition-all cursor-pointer disabled:opacity-50"
+                      >
+                        {isGeneratingOOTD ? <Loader2 className="h-4 w-4 animate-spin text-purple-300" /> : <RefreshCw className="h-4 w-4 text-purple-300" />}
+                        <span className="text-xs font-semibold">Generate From Live Context</span>
+                      </button>
+                      <button
+                        onClick={calendarConnected ? handleDisconnectCalendar : handleConnectCalendar}
+                        className="flex items-center justify-center gap-2 p-3 rounded-xl border border-slate-900 bg-slate-950/40 text-slate-300 hover:text-white hover:border-slate-800 transition-all cursor-pointer"
+                      >
+                        <Calendar className="h-4 w-4 text-amber-300" />
+                        <span className="text-xs font-semibold">{calendarConnected ? "Disconnect Calendar" : "Connect Google Calendar"}</span>
+                      </button>
+                    </div>
+                    {plannerSource && (
+                      <p className="text-[10px] text-slate-500">
+                        Planner source: {plannerSource === "gemini" ? "Gemini" : "Rules fallback"}
+                      </p>
+                    )}
                   </div>
 
                   {/* OOTD Results Card */}
@@ -1348,7 +1904,7 @@ export default function App() {
                           </span>
                           <div className="flex gap-1.5">
                             <button
-                              onClick={() => setLikedOOTD(true)}
+                              onClick={() => submitOOTDFeedback(true)}
                               className={`p-2 rounded-lg border transition-all cursor-pointer ${
                                 likedOOTD === true
                                   ? "bg-purple-600 border-purple-500 text-white"
@@ -1358,7 +1914,7 @@ export default function App() {
                               <Heart className="h-3.5 w-3.5" />
                             </button>
                             <button
-                              onClick={() => setLikedOOTD(false)}
+                              onClick={() => submitOOTDFeedback(false)}
                               className={`text-xs font-semibold px-3.5 py-1.5 rounded-lg border transition-all cursor-pointer ${
                                 likedOOTD === false
                                   ? "bg-red-950/30 border-red-900/80 text-red-400"
@@ -1375,11 +1931,21 @@ export default function App() {
 
                   {/* Email Dispatch button */}
                   <button
-                    onClick={() => alert(`✨ Your curated style digest is on its way! Check your inbox at ${userProfile.email} for your daily styling inspiration.`)}
-                    className="w-full flex items-center justify-center gap-2 text-xs font-semibold py-3 px-4 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-500 hover:from-purple-500 hover:to-indigo-400 text-white transition-all shadow-lg shadow-purple-500/10 cursor-pointer"
+                    onClick={handleSendEmail}
+                    disabled={isSendingEmail}
+                    className="w-full flex items-center justify-center gap-2 text-xs font-semibold py-3 px-4 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-500 hover:from-purple-500 hover:to-indigo-400 text-white transition-all shadow-lg shadow-purple-500/10 cursor-pointer disabled:opacity-50"
                   >
-                    <Mail className="h-4 w-4" />
-                    Send Style Digest Email
+                    {isSendingEmail ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Sending Style Digest...
+                      </>
+                    ) : (
+                      <>
+                        <Mail className="h-4 w-4" />
+                        Send Style Digest Email
+                      </>
+                    )}
                   </button>
                 </div>
 
@@ -1644,27 +2210,275 @@ export default function App() {
           </motion.div>
         )}
       </AnimatePresence>
-    </div>
-  );
-}
+      {/* 5. MINDFUL KONMARI GRATITUDE CEREMONY MODAL */}
+      <AnimatePresence>
+        {releasedItem && (
+          <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-lg flex items-center justify-center p-4 z-50 overflow-y-auto">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 30 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 30 }}
+              className="w-full max-w-lg border border-rose-900/30 bg-gradient-to-b from-slate-900 via-slate-950 to-slate-950 rounded-3xl p-6 md:p-8 shadow-2xl relative overflow-hidden"
+            >
+              {/* Sparkly lavender/rose decorative background lights */}
+              <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-12 h-48 w-48 rounded-full bg-rose-500/10 blur-3xl pointer-events-none" />
+              <div className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-12 h-48 w-48 rounded-full bg-purple-500/10 blur-3xl pointer-events-none" />
 
-// Simple Clock Icon replacement
-function Clock(props: React.SVGProps<SVGSVGElement>) {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      width="24"
-      height="24"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      {...props}
-    >
-      <circle cx="12" cy="12" r="10" />
-      <polyline points="12 6 12 12 16 14" />
-    </svg>
+              <div className="flex flex-col items-center gap-6 relative z-10 text-center">
+                {/* Modal Header */}
+                <div className="flex flex-col items-center gap-2">
+                  <div className="h-14 w-14 rounded-full bg-rose-950/50 border border-rose-900/30 flex items-center justify-center text-rose-300 shadow-lg shadow-rose-950/40 animate-pulse">
+                    <Heart className="h-6 w-6 text-rose-300" />
+                  </div>
+                  <div>
+                    <span className="text-[10px] uppercase font-bold tracking-widest text-rose-400">KonMari Ritual</span>
+                    <h3 className="text-lg font-bold text-white mt-1">Thank &amp; Release Ceremony</h3>
+                  </div>
+                </div>
+
+                {/* Progress Indicators */}
+                <div className="flex items-center gap-2 bg-slate-950/50 border border-slate-900 px-4 py-1.5 rounded-full text-[10px] font-bold text-slate-500">
+                  <span className={ceremonyStep === "reflect" ? "text-purple-400" : "text-slate-500"}>1. Reflect</span>
+                  <span className="text-slate-700">•</span>
+                  <span className={ceremonyStep === "breathe" ? "text-purple-400" : "text-slate-500"}>2. Breathe</span>
+                  <span className="text-slate-700">•</span>
+                  <span className={ceremonyStep === "complete" ? "text-emerald-400" : "text-slate-500"}>3. Release</span>
+                </div>
+
+                {/* STEP 1: REFLECT & GRATITUDE SELECTION */}
+                {ceremonyStep === "reflect" && (
+                  <div className="w-full flex flex-col gap-4">
+                    {/* Item Preview */}
+                    <div className="flex items-center gap-4 bg-slate-950/40 border border-slate-900 rounded-2xl p-3 text-left">
+                      <img
+                        src={releasedItem.image_url}
+                        alt={releasedItem.sub_category}
+                        className="w-14 h-18 object-cover rounded-xl border border-slate-850 shadow-md"
+                      />
+                      <div className="flex flex-col gap-0.5">
+                        <span className="text-[10px] text-purple-400 font-bold uppercase">{releasedItem.category}</span>
+                        <h4 className="text-sm font-bold text-white">{releasedItem.color_family} {releasedItem.sub_category}</h4>
+                        <span className="text-[10px] text-slate-500">Last worn: {formatLastWorn(releasedItem.last_worn_at)}</span>
+                      </div>
+                    </div>
+
+                    {/* Joy Score Confirmation */}
+                    <div className="flex flex-col gap-1 text-left bg-slate-950/20 border border-slate-900 p-4 rounded-2xl">
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex justify-between items-center">
+                        Confirm Joy Score:
+                        <span className="text-[11px] text-yellow-400 font-bold">
+                          {releasedItem.joy_score === 1 && "💔 No Joy"}
+                          {releasedItem.joy_score === 2 && "🌸 Low Joy"}
+                          {releasedItem.joy_score === 3 && "⭐️ Neutral"}
+                          {releasedItem.joy_score === 4 && "✨ Sparks Joy!"}
+                          {releasedItem.joy_score === 5 && "💖 Sparks Immense Joy!"}
+                        </span>
+                      </span>
+                      <div className="flex gap-2.5 mt-2">
+                        {[1, 2, 3, 4, 5].map(star => (
+                          <button
+                            key={star}
+                            onClick={() => {
+                              updateItemJoyScore(releasedItem.id, star);
+                              setReleasedItem((prev: any) => ({ ...prev, joy_score: star }));
+                            }}
+                            className="text-slate-600 hover:text-yellow-400 transition-all transform hover:scale-110 cursor-pointer"
+                          >
+                            <svg
+                              xmlns="http://www.w3.org/2000/svg"
+                              className={`h-6 w-6 ${
+                                star <= (releasedItem.joy_score || 5)
+                                  ? "fill-yellow-400 text-yellow-400"
+                                  : "text-slate-700"
+                              }`}
+                              viewBox="0 0 24 24"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.907c.961 0 1.36 1.246.588 1.81l-3.97 2.883a1 1 0 00-.364 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.971-2.883a1 1 0 00-1.178 0l-3.97 2.883c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.364-1.118L2.98 10.1c-.773-.564-.374-1.81.588-1.81h4.908a1 1 0 00.95-.69l1.519-4.674z"
+                              />
+                            </svg>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Gratitude Prompt Selection */}
+                    <div className="flex flex-col gap-2 text-left">
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Select Gratitude Theme:</label>
+                      <select
+                        value={gratitudeOption}
+                        onChange={(e) => setGratitudeOption(e.target.value)}
+                        className="w-full p-3 bg-slate-950 border border-slate-850 rounded-xl text-xs text-slate-200 focus:outline-none focus:border-purple-500 transition-colors"
+                      >
+                        <option value="served_comfort">Cozy &amp; Comfort (&quot;keeping me warm and comfortable&quot;)</option>
+                        <option value="served_moments">Confidence &amp; Special Memories (&quot;bringing me confidence and joy&quot;)</option>
+                        <option value="served_lesson">Style Growth &amp; Lessons (&quot;teaching me what style doesn&apos;t fit me&quot;)</option>
+                        <option value="served_gift">A Connection of Kindness (&quot;representing a kind gesture from someone dear&quot;)</option>
+                        <option value="served_journey">An Elegant Companion (&quot;being a beautiful styling partner on my journey&quot;)</option>
+                        <option value="custom">Custom Mindful Reflection Note...</option>
+                      </select>
+                    </div>
+
+                    {/* Optional Custom Gratitude Note */}
+                    {gratitudeOption === "custom" && (
+                      <div className="flex flex-col gap-1.5 text-left">
+                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Your Personal Thank-You Note:</label>
+                        <textarea
+                          rows={2}
+                          value={customGratitude}
+                          onChange={(e) => setCustomGratitude(e.target.value)}
+                          placeholder="Write a custom thank-you reflection..."
+                          className="w-full p-3.5 rounded-xl bg-slate-950 border border-slate-850 text-xs text-slate-200 placeholder-slate-600 focus:border-purple-500 focus:outline-none transition-colors"
+                        />
+                      </div>
+                    )}
+
+                    {/* Live Preview of the Mindful Thank-You Note */}
+                    <div className="border border-purple-900/20 bg-purple-950/5 rounded-2xl p-4 text-left relative mt-1">
+                      <span className="text-[8px] uppercase font-bold tracking-widest text-purple-400 absolute top-2.5 right-3">Live Statement</span>
+                      <p className="text-xs text-slate-300 italic leading-relaxed pt-2">
+                        &quot;Thank you, {releasedItem.color_family} {releasedItem.sub_category}, for{" "}
+                        {gratitudeOption === "custom" && customGratitude
+                          ? customGratitude
+                          : gratitudeOption === "custom"
+                          ? "the memories and lessons we shared"
+                          : gratitudeOption === "served_comfort"
+                          ? "keeping me warm, cozy, and comfortable whenever I needed it"
+                          : gratitudeOption === "served_moments"
+                          ? "giving me confidence, strength, and joy during beautiful moments"
+                          : gratitudeOption === "served_lesson"
+                          ? "teaching me more about my personal style and helping me understand what doesn't suit me"
+                          : gratitudeOption === "served_gift"
+                          ? "representing a warm gesture of kindness and connection from someone dear"
+                          : "being a wonderful and elegant companion during this chapter of my life"
+                        }. You have served me beautifully. I release you with gratitude to find a new home.&quot;
+                      </p>
+                    </div>
+
+                    {/* Action Row */}
+                    <div className="flex gap-3 mt-4">
+                      <button
+                        onClick={() => setReleasedItem(null)}
+                        className="flex-1 py-3 border border-slate-850 hover:bg-slate-900 text-xs font-bold text-slate-400 hover:text-white rounded-xl cursor-pointer transition-all"
+                      >
+                        Keep Garment
+                      </button>
+                      <button
+                        onClick={() => setCeremonyStep("breathe")}
+                        className="flex-1 py-3 bg-gradient-to-r from-purple-600 to-indigo-500 hover:from-purple-500 hover:to-indigo-400 text-white font-bold text-xs rounded-xl shadow-lg shadow-purple-500/15 cursor-pointer transition-all flex items-center justify-center gap-1.5"
+                      >
+                        Mindful Breath
+                        <ArrowRight className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* STEP 2: BREATHING MINDFULNESS EXERCISE */}
+                {ceremonyStep === "breathe" && (
+                  <div className="w-full flex flex-col items-center gap-6">
+                    {/* Immersive Pulsing Breathing Circle */}
+                    <div className="relative h-48 w-48 flex items-center justify-center">
+                      {/* Concentric expanding wave 1 */}
+                      <motion.div
+                        animate={{ scale: isBreathingIn ? [1, 1.4, 1] : [1, 1.1, 1] }}
+                        transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
+                        className={`absolute inset-0 rounded-full border ${
+                          isBreathingIn ? "border-purple-500/20 bg-purple-500/3" : "border-rose-500/20 bg-rose-500/3"
+                        }`}
+                      />
+                      {/* Concentric expanding wave 2 */}
+                      <motion.div
+                        animate={{ scale: isBreathingIn ? [1, 1.2, 1] : [1, 1.05, 1] }}
+                        transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
+                        className={`absolute h-36 w-33 rounded-full border ${
+                          isBreathingIn ? "border-purple-500/30 bg-purple-500/5" : "border-rose-500/30 bg-rose-500/5"
+                        }`}
+                      />
+                      {/* Heart core */}
+                      <div className="h-24 w-24 rounded-full bg-slate-950 border border-slate-850 flex flex-col items-center justify-center z-10 shadow-lg">
+                        <img
+                          src={releasedItem.image_url}
+                          alt={releasedItem.sub_category}
+                          className="h-16 w-12 object-cover rounded-md opacity-40 shadow-inner"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Dynamically toggling breathing messages */}
+                    <div className="flex flex-col gap-1.5">
+                      <h4 className="text-sm font-bold text-white tracking-wide">
+                        {isBreathingIn ? "✨ Inhale Love & Space ✨" : "🌸 Exhale Gratitude & Release 🌸"}
+                      </h4>
+                      <p className="text-xs text-slate-400 max-w-xs leading-relaxed">
+                        {isBreathingIn
+                          ? "Breathe in peace, acknowledging the joy and utility this garment brought into your life."
+                          : "Exhale attachment, letting go of clutter and sending positive energy to the next owner."}
+                      </p>
+                    </div>
+
+                    <p className="text-[10px] text-purple-400 font-bold tracking-wider animate-pulse">
+                      Synchronize your breathing with the pulsing expansion...
+                    </p>
+
+                    {/* Action Row */}
+                    <div className="flex gap-3 w-full mt-4">
+                      <button
+                        onClick={() => setCeremonyStep("reflect")}
+                        className="flex-1 py-3 border border-slate-850 hover:bg-slate-900 text-xs font-bold text-slate-400 hover:text-white rounded-xl cursor-pointer transition-all"
+                      >
+                        Adjust Note
+                      </button>
+                      <button
+                        onClick={() => setCeremonyStep("complete")}
+                        className="flex-1 py-3 bg-gradient-to-r from-rose-500 to-purple-600 hover:from-rose-400 hover:to-purple-500 text-white font-bold text-xs rounded-xl shadow-lg shadow-rose-500/15 cursor-pointer transition-all flex items-center justify-center gap-1.5"
+                      >
+                        <Sparkle className="h-3.5 w-3.5" />
+                        Complete Release
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* STEP 3: RITUAL COMPLETION */}
+                {ceremonyStep === "complete" && (
+                  <div className="w-full flex flex-col items-center gap-5">
+                    <div className="h-20 w-20 rounded-full bg-emerald-950/40 border border-emerald-500/20 flex items-center justify-center text-emerald-400 shadow-xl shadow-emerald-950/20 relative">
+                      <div className="absolute inset-0 rounded-full bg-emerald-500/10 animate-ping" />
+                      <CheckCircle2 className="h-10 w-10 text-emerald-400" />
+                    </div>
+
+                    <div className="flex flex-col gap-1.5">
+                      <h4 className="text-base font-bold text-white">Item Released with Love</h4>
+                      <p className="text-xs text-slate-300 max-w-xs leading-relaxed">
+                        Your {releasedItem.color_family} {releasedItem.sub_category} has been thanked, blessed, and released! It has been added to your released catalog and is ready to find its new home.
+                      </p>
+                    </div>
+
+                    <div className="rounded-2xl border border-emerald-900/30 bg-emerald-950/5 p-4 text-left w-full">
+                      <span className="text-[9px] uppercase font-bold text-emerald-400 tracking-wider">Mindful Thought:</span>
+                      <p className="text-xs text-slate-300 leading-relaxed mt-1 italic">
+                        &quot;By decluttering with gratitude, you let go of the past and make conscious, beautiful space for new inspiration and opportunities to unfold in your wardrobe and life.&quot;
+                      </p>
+                    </div>
+
+                    <button
+                      onClick={handleCompleteReleaseCeremony}
+                      className="w-full py-3 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-bold text-xs rounded-xl shadow-lg shadow-emerald-500/15 cursor-pointer transition-all"
+                    >
+                      Return to Declutter Room
+                    </button>
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+    </div>
   );
 }

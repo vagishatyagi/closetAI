@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { getSupabaseAdmin } from '@/lib/supabase';
 import { logger } from '@/lib/logger';
 
 export const runtime = 'nodejs';
@@ -17,6 +17,7 @@ export async function POST(req: NextRequest) {
   try {
     const formData = await req.formData();
     const file = formData.get('file') as File | null;
+    const requestedUserId = formData.get('userId');
 
     if (!file) {
       logger.warn('Upload attempted without a file parameter.');
@@ -45,8 +46,7 @@ export async function POST(req: NextRequest) {
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
 
-    const mockUserId = '00000000-0000-0000-0000-000000000000';
-    const userId = mockUserId;
+    const userId = typeof requestedUserId === 'string' && requestedUserId ? requestedUserId : 'pending-profile';
 
     const uniqueId = `${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
     const fileExtension = file.name.split('.').pop() || 'jpg';
@@ -54,7 +54,8 @@ export async function POST(req: NextRequest) {
 
     // 3. Try to upload to Supabase Storage
     try {
-      const { data, error } = await supabase.storage
+      const admin = getSupabaseAdmin();
+      const { error } = await admin.storage
         .from('wardrobe')
         .upload(storagePath, buffer, {
           contentType: file.type,
@@ -63,7 +64,7 @@ export async function POST(req: NextRequest) {
 
       if (!error) {
         // Success: Generate Public Retrieval URL
-        const { data: { publicUrl } } = supabase.storage
+        const { data: { publicUrl } } = admin.storage
           .from('wardrobe')
           .getPublicUrl(storagePath);
 

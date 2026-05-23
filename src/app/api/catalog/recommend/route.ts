@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { getSupabaseAdmin } from '@/lib/supabase';
 import { generateStyleEmbedding } from '@/lib/gemini';
 import { logger } from '@/lib/logger';
+import { resolveAppUser } from '@/lib/profile';
 
 export const runtime = 'nodejs';
 
@@ -95,15 +96,25 @@ export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const customUserId = searchParams.get('userId');
+    const email = searchParams.get('email');
+    const fullName = searchParams.get('fullName');
+    const city = searchParams.get('city');
     const maxBudgetParam = searchParams.get('budget');
 
-    const userId = customUserId || '00000000-0000-0000-0000-000000000000';
+    const { userId } = await resolveAppUser({
+      userId: customUserId,
+      email,
+      fullName,
+      locationCity: city,
+      budgetLimit: maxBudgetParam ? parseFloat(maxBudgetParam) : undefined,
+    });
+    const admin = getSupabaseAdmin();
 
     // 1. Fetch user budget limit and style preference vector
     let maxBudget = maxBudgetParam ? parseFloat(maxBudgetParam) : 100.00;
     let preferenceVector: number[] | null = null;
 
-    const { data: profile, error: dbError } = await supabase
+    const { data: profile, error: dbError } = await admin
       .from('profiles')
       .select('budget_cap_usd, style_preference_vector')
       .eq('id', userId)

@@ -7,8 +7,8 @@
 export const AI_CONFIG = {
   // Models to use from Google AI Studio / Vertex AI
   models: {
-    tagger: "gemini-1.5-flash",        // Fast, cost-effective, multi-modal
-    planner: "gemini-3.1-pro",         // Advanced context window and reasoning
+    tagger: process.env.GEMINI_TAGGER_MODEL || "gemini-2.5-flash",
+    planner: process.env.GEMINI_PLANNER_MODEL || "gemini-2.5-flash",
     embedding: "text-embedding-004",  // Text vector embedding generator
   },
 

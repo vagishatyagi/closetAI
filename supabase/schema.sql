@@ -11,6 +11,7 @@ CREATE EXTENSION IF NOT EXISTS vector;
 CREATE TABLE IF NOT EXISTS public.profiles (
   id UUID REFERENCES auth.users PRIMARY KEY,
   full_name TEXT,
+  email TEXT,
   location_city TEXT DEFAULT 'New York',
   temperature_unit VARCHAR(1) DEFAULT 'F', -- 'F' or 'C'
   daily_ootd_time TIME DEFAULT '07:00:00',
@@ -41,6 +42,8 @@ CREATE TABLE IF NOT EXISTS public.wardrobe_items (
   max_temp INT DEFAULT 85, -- Maximum suitable Fahrenheit temperature
   precipitation_resistant BOOLEAN DEFAULT false,
   style_embedding VECTOR(1536), -- Embedded text representation of the item tags
+  joy_score INT DEFAULT 5, -- Marie Kondo joy score (1 to 5)
+  last_worn_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()), -- When was this item worn last time
   created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
 );
 
@@ -50,6 +53,16 @@ ALTER TABLE public.wardrobe_items ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Users can manage their own wardrobe items"
   ON public.wardrobe_items FOR ALL
   USING (auth.uid() = user_id);
+
+-- Public storage bucket for uploaded clothing photos. The app uploads with the
+-- service role from server routes, then stores the public URL in wardrobe_items.
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('wardrobe', 'wardrobe', true)
+ON CONFLICT (id) DO UPDATE SET public = true;
+
+CREATE POLICY "Public can read wardrobe images"
+  ON storage.objects FOR SELECT
+  USING (bucket_id = 'wardrobe');
 
 -- 4. Create the User Feedbacks table for reinforcement learning
 CREATE TABLE IF NOT EXISTS public.user_feedbacks (

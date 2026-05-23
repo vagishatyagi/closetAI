@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { getSupabaseAdmin } from '@/lib/supabase';
 import { logger } from '@/lib/logger';
+import { resolveAppUser } from '@/lib/profile';
 
 export const runtime = 'nodejs';
 
@@ -15,7 +16,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { userId: customUserId, itemIds, liked, dislikeReason } = body;
+    const { userId: customUserId, userProfile, itemIds, liked, dislikeReason } = body;
 
     if (!itemIds || !Array.isArray(itemIds) || itemIds.length === 0 || liked === undefined) {
       logger.warn('Feedback recorded with missing arguments');
@@ -25,12 +26,19 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const userId = customUserId || '00000000-0000-0000-0000-000000000000';
+    const { userId } = await resolveAppUser({
+      userId: customUserId,
+      fullName: userProfile?.fullName,
+      email: userProfile?.email,
+      locationCity: userProfile?.locationCity,
+      budgetLimit: userProfile?.budgetLimit,
+    });
+    const admin = getSupabaseAdmin();
 
     logger.info(functionName, { userId, itemIds, liked, dislikeReason });
 
     // 1. Insert explicit feedback record to Postgres
-    const { error: insertError } = await supabase
+    const { error: insertError } = await admin
       .from('user_feedbacks')
       .insert({
         user_id: userId,
@@ -40,17 +48,18 @@ export async function POST(req: NextRequest) {
       });
 
     if (insertError) {
-      logger.error('Failed to log user feedback record', insertError);
-      return NextResponse.json(
-        { error: `Database insert failed: ${insertError.message}` },
-        { status: 500 }
-      );
+      logger.warn('Failed to log user feedback record. Keeping UI feedback local.', insertError);
+      return NextResponse.json({
+        success: true,
+        persisted: false,
+        message: 'Feedback accepted locally, but the database table is not available yet.',
+      });
     }
 
     // 2. If liked, update the user style preference vector dynamically
     if (liked) {
       // A. Fetch style embeddings of all items in the outfit
-      const { data: items, error: fetchError } = await supabase
+      const { data: items, error: fetchError } = await admin
         .from('wardrobe_items')
         .select('style_embedding')
         .in('id', itemIds);
@@ -75,7 +84,7 @@ export async function POST(req: NextRequest) {
           }
 
           // B. Fetch existing profile vector
-          const { data: profile, error: profileErr } = await supabase
+          const { data: profile } = await admin
             .from('profiles')
             .select('style_preference_vector')
             .eq('id', userId)
@@ -92,7 +101,7 @@ export async function POST(req: NextRequest) {
           }
 
           // C. Update user profile with new aggregated vector
-          const { error: updateError } = await supabase
+          const { error: updateError } = await admin
             .from('profiles')
             .update({ style_preference_vector: finalVector })
             .eq('id', userId);

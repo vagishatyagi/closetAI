@@ -1,6 +1,7 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { AI_CONFIG } from '../config/aiConfig';
 import { logger } from './logger';
+import { buildRuleBasedOOTD, normalizePlannerResult } from './ootdUtils';
 
 const apiKey = process.env.GEMINI_API_KEY || '';
 
@@ -231,9 +232,20 @@ export async function generateOOTD(
     const responseText = result.response.text().trim();
     logger.ai(modelName, 'Synthesizing closet matching schedule...', { temperature: AI_CONFIG.params.plannerTemperature }, responseText);
 
-    return JSON.parse(responseText);
+    const parsed = JSON.parse(responseText);
+    const normalized = normalizePlannerResult(parsed, weatherPayload, calendarPayload, closetPayload);
+
+    if (!normalized.outfits?.length || !normalized.outfits[0]?.items?.length) {
+      logger.warn('Gemini planner returned no usable outfit. Falling back to deterministic planner.');
+      return buildRuleBasedOOTD(weatherPayload, calendarPayload, closetPayload);
+    }
+
+    return {
+      ...normalized,
+      plannerSource: 'gemini',
+    };
   } catch (error) {
-    logger.error(`Error in ${functionName}`, error);
-    throw new Error('Failed to generate daily OOTD using Gemini 3.1 Pro.');
+    logger.error(`Error in ${functionName}. Falling back to deterministic outfit planner.`, error);
+    return buildRuleBasedOOTD(weatherPayload, calendarPayload, closetPayload);
   }
 }
