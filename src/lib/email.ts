@@ -23,7 +23,30 @@ export async function sendStyleDigestEmail(input: StyleDigestInput) {
   const html = buildStyleDigestEmail(input);
   const subject = `Your Closet Companion digest - ${formatWeatherLabel(input.weather)}`;
   const from = process.env.RESEND_FROM_EMAIL || "Closet Companion <onboarding@resend.dev>";
-  const payload = { from, subject, html };
+
+  const attachments: any[] = [];
+  const pieces = input.outfit.items || [];
+  pieces.forEach((item, index) => {
+    const imageUrl = item.imageUrl || (item as any).image_url;
+    if (imageUrl && imageUrl.startsWith("data:")) {
+      const match = imageUrl.match(/^data:([^;]+);base64,(.+)$/);
+      if (match) {
+        const contentType = match[1];
+        const base64Data = match[2];
+        const extension = contentType.split("/")[1] || "png";
+        attachments.push({
+          content: base64Data,
+          filename: `item-${index}.${extension}`,
+          contentId: `item-img-${index}`,
+        });
+      }
+    }
+  });
+
+  const payload: Record<string, any> = { from, subject, html };
+  if (attachments.length > 0) {
+    payload.attachments = attachments;
+  }
 
   const firstAttempt = await postResendEmail(resendApiKey, { ...payload, to: [input.to] });
 
@@ -138,8 +161,11 @@ export function buildStyleDigestEmail({ fullName, city, weather, calendar, outfi
                 pieces.length
                   ? pieces
                       .map(
-                        (item) => {
-                          const imageUrl = item.imageUrl || (item as any).image_url;
+                        (item, index) => {
+                          let imageUrl = item.imageUrl || (item as any).image_url;
+                          if (imageUrl && imageUrl.startsWith("data:")) {
+                            imageUrl = `cid:item-img-${index}`;
+                          }
                           const subCategory = item.subCategory || (item as any).sub_category || "Wardrobe piece";
                           const category = item.category || "Closet item";
                           return `
