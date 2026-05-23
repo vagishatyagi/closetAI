@@ -21,8 +21,8 @@ export async function sendStyleDigestEmail(input: StyleDigestInput) {
   }
 
   const html = buildStyleDigestEmail(input);
-  const subject = `Your Closet Companion digest - ${formatWeatherLabel(input.weather)}`;
-  const from = process.env.RESEND_FROM_EMAIL || "Closet Companion <onboarding@resend.dev>";
+  const subject = `Your vibecheck.ai digest - ${formatWeatherLabel(input.weather)}`;
+  const from = process.env.RESEND_FROM_EMAIL || "vibecheck.ai <onboarding@resend.dev>";
 
   const attachments: any[] = [];
   const pieces = input.outfit.items || [];
@@ -143,7 +143,7 @@ export function buildStyleDigestEmail({ fullName, city, weather, calendar, outfi
       <body>
         <div class="card">
           <div class="header">
-            <h1>Closet Companion</h1>
+            <h1>vibecheck.ai</h1>
             <p>A mindful outfit plan for the day ahead.</p>
           </div>
           <div class="content">

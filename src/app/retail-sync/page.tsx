@@ -257,7 +257,7 @@ export default function RetailSyncPortal() {
                 <span className="text-xs text-slate-500">Multitasking Sync Console</span>
               </div>
               <h1 className="text-lg font-bold tracking-tight text-white flex items-center gap-2">
-                Closet Companion Retail Hub
+                VibeCheck Retail Hub
               </h1>
             </div>
           </div>

@@ -25,22 +25,34 @@ export async function resolveAppUser(input: ProfileInput = {}) {
 
   try {
     if (!userId) {
-      const { data, error } = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 });
-      if (error) throw error;
-      const existing = data.users.find((user) => user.email?.toLowerCase() === lookupEmail.toLowerCase());
+      // 1. Attempt rapid resolution via profiles table (takes < 50ms)
+      const { data: existingProfile } = await admin
+        .from("profiles")
+        .select("id")
+        .eq("email", lookupEmail)
+        .maybeSingle();
 
-      if (existing) {
-        userId = existing.id;
+      if (existingProfile?.id) {
+        userId = existingProfile.id;
       } else {
-        const { data: created, error: createError } = await admin.auth.admin.createUser({
-          email: lookupEmail,
-          password: `${crypto.randomUUID()}-${crypto.randomUUID()}`,
-          email_confirm: true,
-          user_metadata: { full_name: fullName, name: fullName },
-        });
+        // 2. Fallback to slow listUsers only if profile does not exist yet
+        const { data, error } = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 });
+        if (error) throw error;
+        const existing = data.users.find((user) => user.email?.toLowerCase() === lookupEmail.toLowerCase());
 
-        if (createError || !created.user) throw createError || new Error("Supabase did not return a created user.");
-        userId = created.user.id;
+        if (existing) {
+          userId = existing.id;
+        } else {
+          const { data: created, error: createError } = await admin.auth.admin.createUser({
+            email: lookupEmail,
+            password: `${crypto.randomUUID()}-${crypto.randomUUID()}`,
+            email_confirm: true,
+            user_metadata: { full_name: fullName, name: fullName },
+          });
+
+          if (createError || !created.user) throw createError || new Error("Supabase did not return a created user.");
+          userId = created.user.id;
+        }
       }
     }
 
@@ -62,9 +74,9 @@ export async function resolveAppUser(input: ProfileInput = {}) {
     logger.info(functionName, { userId, email: email || lookupEmail, locationCity, budgetLimit });
 
     return {
-      userId,
+      userId: userId as string,
       profile: {
-        id: userId,
+        id: userId as string,
         full_name: fullName,
         email: email || lookupEmail,
         location_city: locationCity,

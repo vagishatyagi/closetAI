@@ -138,19 +138,50 @@ export function hasGoogleConnectedCookie(req: NextRequest) {
   return req.cookies.get(CONNECTED_COOKIE)?.value === "1";
 }
 
+const CALENDAR_CACHE = new Map<string, {
+  connected: boolean;
+  events: CalendarEventPayload[];
+  error?: string;
+  debug: GoogleCalendarDebug;
+  expiresAt: number;
+}>();
+
+const CACHE_TTL_MS = 3 * 60 * 1000; // 3 minutes cache TTL
+
 export async function fetchGoogleCalendarEvents(req: NextRequest): Promise<{
   connected: boolean;
   events: CalendarEventPayload[];
   error?: string;
   debug: GoogleCalendarDebug;
 }> {
+  const refreshToken = req.cookies.get(REFRESH_COOKIE)?.value;
+  
   const debug: GoogleCalendarDebug = {
     connectedCookie: hasGoogleConnectedCookie(req),
-    refreshTokenPresent: hasGoogleRefreshToken(req),
+    refreshTokenPresent: Boolean(refreshToken),
     accessTokenRefreshed: false,
     calendarCount: 0,
     queries: [],
   };
+
+  if (!refreshToken) {
+    return { connected: false, events: [], debug };
+  }
+
+  // 1. Check in-memory Cache first to optimize latency (0ms cache hits)
+  const cached = CALENDAR_CACHE.get(refreshToken);
+  if (cached && cached.expiresAt > Date.now()) {
+    logger.info("fetchGoogleCalendarEvents [CACHE HIT]", { eventCount: cached.events.length });
+    return {
+      connected: cached.connected,
+      events: cached.events,
+      error: cached.error,
+      debug: {
+        ...cached.debug,
+        fromCache: true,
+      } as any,
+    };
+  }
 
   try {
     const accessToken = await refreshGoogleAccessToken(req);
@@ -177,14 +208,30 @@ export async function fetchGoogleCalendarEvents(req: NextRequest): Promise<{
       events = upcomingResult.events;
     }
 
-    return {
+    const result = {
       connected: true,
       events,
       debug,
     };
+
+    // 2. Cache successful results
+    CALENDAR_CACHE.set(refreshToken, {
+      ...result,
+      expiresAt: Date.now() + CACHE_TTL_MS,
+    });
+
+    return result;
   } catch (error: any) {
     logger.error("Failed to fetch Google Calendar events.", error);
-    return { connected: false, events: [], error: error.message, debug };
+    const errResult = { connected: false, events: [], error: error.message, debug };
+    
+    // Cache failures briefly (e.g., 15s) to avoid slamming API under network error conditions
+    CALENDAR_CACHE.set(refreshToken, {
+      ...errResult,
+      expiresAt: Date.now() + 15 * 1000,
+    });
+
+    return errResult;
   }
 }
 

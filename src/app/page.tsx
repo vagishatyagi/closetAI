@@ -862,6 +862,7 @@ export default function App() {
 
   // OOTD compilation backed by live weather, Google Calendar, Supabase closet, and Gemini.
   const compileOOTDSelection = async () => {
+    if (isGeneratingOOTD) return;
     setIsGeneratingOOTD(true);
     setLikedOOTD(null);
 
@@ -1542,7 +1543,7 @@ export default function App() {
                 </div>
                 <div>
                   <h1 className="text-xl font-bold tracking-tight bg-gradient-to-r from-white via-slate-200 to-slate-400 bg-clip-text text-transparent">
-                    Closet Companion
+                    vibecheck.ai
                   </h1>
                   <p className="text-[10px] text-purple-400 uppercase tracking-widest font-bold">
                     Mindful Style Companion
@@ -2859,7 +2860,7 @@ export default function App() {
                         <div className="text-center">
                           <h4 className="text-sm font-bold text-white">Extract Complete</h4>
                           <p className="text-[11px] text-slate-400 mt-1 max-w-xs">
-                            5 brand-new retail pieces added. Closet Companion synthesized item color tags, fabric contents, and weather suitability indices using Google Gemini.
+                            5 brand-new retail pieces added. vibecheck.ai synthesized item color tags, fabric contents, and weather suitability indices using Google Gemini.
                           </p>
                         </div>
                         
