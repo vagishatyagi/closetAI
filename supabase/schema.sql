@@ -146,3 +146,25 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 CREATE OR REPLACE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
+
+-- ============================================================================
+-- 7. Create the Connected Stores table to track third-party shopping integrations
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS public.connected_stores (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE NOT NULL,
+  store_name VARCHAR(50) NOT NULL, -- e.g., 'zara.com', 'asos.com'
+  username VARCHAR(255) NOT NULL,
+  status VARCHAR(50) DEFAULT 'connected', -- 'connected', 'syncing', 'synced'
+  last_synced_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()),
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
+  UNIQUE (user_id, store_name)
+);
+
+-- Enable RLS on Connected Stores
+ALTER TABLE public.connected_stores ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users can manage their own connected stores"
+  ON public.connected_stores FOR ALL
+  USING (auth.uid() = user_id);
+
